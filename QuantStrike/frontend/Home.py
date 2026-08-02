@@ -13,8 +13,8 @@ from datetime import timedelta
 import plotly.graph_objects as go
 import os
 
-DEFAULT_INDEX = str(ROOT / "data" / "raw" / "item_index.csv")
-DEFAULT_ITEMS = str(ROOT / "data" / "raw" / "items")
+DEFAULT_INDEX = str(ROOT / "data" / "demo" / "item_index.csv")
+DEFAULT_ITEMS = str(ROOT / "data" / "demo" / "items")
 
 INDEX_FILE = os.environ.get("QUANTSTRIKE_INDEX_FILE", DEFAULT_INDEX)
 ITEMS_DIRECTORY = os.environ.get("QUANTSTRIKE_ITEMS_DIR", DEFAULT_ITEMS)
