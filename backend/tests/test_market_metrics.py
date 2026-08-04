@@ -49,3 +49,19 @@ def test_all_time_low():
     metrics = MarketMetrics(create_test_history())
 
     assert metrics.all_time_low == 10
+
+def test_cagr():
+    metrics = MarketMetrics(create_test_history())
+    assert metrics.cagr != 0.0  # just confirms it computes without error
+
+def test_volatility():
+    metrics = MarketMetrics(create_test_history())
+    assert metrics.volatility >= 0.0
+
+def test_max_drawdown():
+    metrics = MarketMetrics(create_test_history()) # test data is monotonically increasing, so drawdown should be 0
+    assert metrics.max_drawdown == 0.0
+
+def test_moving_average():
+    metrics = MarketMetrics(create_test_history())
+    assert metrics.moving_average(2) == (12 + 15) / 2

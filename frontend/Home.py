@@ -38,7 +38,16 @@ def load_repository():
     )
 
 repo = load_repository()
-
+with st.expander("ℹ️ This is a demo — which skins are searchable?"):
+    st.write(
+        f"This deployed version uses a curated subset of the full dataset "
+        f"({len(repo.index)} items) to keep load times fast. A few examples:"
+    )
+    sample = repo.index["name"].str.split(" (").str[0].str.replace(
+        "StatTrak™ ", "", regex=False
+    ).str.replace("Souvenir ", "", regex=False).drop_duplicates().sample(8, random_state=1)
+    st.write(", ".join(sample.tolist()))
+    
 PLACEHOLDER_SKINS = [
     "Redline",
     "Aquamarine Revenge",
@@ -228,3 +237,29 @@ if skin:
         st.metric("Std. Deviation", f"${metrics.standard_deviation:.2f}")
     with col8:
         st.metric("52W High", f"${metrics.high_52w:.2f}")
+
+    # -----------------------------
+    # Return & Risk
+    # -----------------------------
+    st.divider()
+    st.subheader("Return & Risk")
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Weekly Return", f"{metrics.weekly_return:.2f}%")
+    with col2:
+        st.metric("Monthly Return", f"{metrics.monthly_return:.2f}%")
+    with col3:
+        st.metric("Annual Return", f"{metrics.annual_return:.2f}%")
+    with col4:
+        st.metric("CAGR", f"{metrics.cagr:.2f}%")
+
+    col5, col6, col7, col8 = st.columns(4)
+    with col5:
+        st.metric("Volatility (daily)", f"{metrics.volatility:.2f}%")
+    with col6:
+        st.metric("Max Drawdown", f"{metrics.max_drawdown:.2f}%")
+    with col7:
+        st.metric("30-Day MA", f"${metrics.moving_average(30):.2f}")
+    with col8:
+        st.metric("90-Day MA", f"${metrics.moving_average(90):.2f}")
