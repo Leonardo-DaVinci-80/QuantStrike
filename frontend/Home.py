@@ -43,7 +43,7 @@ with st.expander("ℹ️ This is a demo — which skins are searchable?"):
         f"This deployed version uses a curated subset of the full dataset "
         f"({len(repo.index)} items) to keep load times fast. A few examples:"
     )
-    sample = repo.index["name"].str.split(" (").str[0].str.replace(
+    sample = repo.index["name"].str.split(" (", regex=False).str[0].str.replace(
         "StatTrak™ ", "", regex=False
     ).str.replace("Souvenir ", "", regex=False).drop_duplicates().sample(8, random_state=1)
     st.write(", ".join(sample.tolist()))
