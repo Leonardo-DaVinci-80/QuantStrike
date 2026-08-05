@@ -187,11 +187,11 @@ if skin:
 
     range_choice = st.radio(
         "Range",
-        ["1W", "1M", "3M", "1Y", "All"],
+        ["1W", "1M", "3M", "1Y", "3Y", "5Y", "All"],
         horizontal=True
     )
 
-    RANGE_DAYS = {"1W": 7, "1M": 30, "3M": 90, "1Y": 365, "All": None}
+    RANGE_DAYS = {"1W": 7, "1M": 30, "3M": 90, "1Y": 365, "3Y": 365*3, "5Y": 365*5, "All": None}
     days = RANGE_DAYS[range_choice]
 
     if days:
