@@ -156,3 +156,26 @@ class MarketMetrics:
                 if drawdown < max_dd:
                     max_dd = drawdown
         return max_dd
+
+    @property
+    def sharpe_ratio(self) -> float:
+        """
+        Calculates risk-adjusted return.
+
+        Assumes risk-free rate = 0 because CS skins
+        do not have a traditional risk-free alternative.
+        """
+
+        returns = self.daily_returns
+
+        if len(returns) < 2:
+            return 0.0
+
+        average_return = mean(returns)
+
+        risk = stdev(returns)
+
+        if risk == 0:
+            return 0.0
+
+        return average_return / risk

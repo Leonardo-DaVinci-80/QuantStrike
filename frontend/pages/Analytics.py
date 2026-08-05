@@ -1,11 +1,14 @@
 import sys
+import plotly.express as px
 from pathlib import Path
-
+import pandas as pd
 ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(ROOT))
 
 import streamlit as st  # type: ignore
 from backend.repositories.skin_repository import SkinRepository
+from backend.analytics.correlation import CorrelationAnalyzer
+
 
 st.set_page_config(page_title="QuantStrike — Analytics", layout="wide")
 
@@ -131,11 +134,14 @@ if skin_a and skin_b:
     try:
         history_b = collector.load_history(skin_b.history_file)
         metrics_b = MarketMetrics(history_b)
+        correlation_analyzer = CorrelationAnalyzer(history_a,history_b)
     except (FileNotFoundError, ValueError) as e:
         st.error(f"Could not load data for {skin_b.name}: {e}")
         st.stop()
 
-    st.subheader("Comparison")
+    st.divider()
+
+    st.subheader("Performance Comparison")
 
     comparison_data = {
         "Metric": [
@@ -147,6 +153,7 @@ if skin_a and skin_b:
             "Volatility (daily)",
             "Max Drawdown",
             "Standard Deviation",
+            "Sharpe Ratio",
         ],
         skin_a.name: [
             f"${metrics_a.current_price:.2f}",
@@ -157,6 +164,7 @@ if skin_a and skin_b:
             f"{metrics_a.volatility:.2f}%",
             f"{metrics_a.max_drawdown:.2f}%",
             f"${metrics_a.standard_deviation:.2f}",
+            f"{metrics_a.sharpe_ratio:.2f}",
         ],
         skin_b.name: [
             f"${metrics_b.current_price:.2f}",
@@ -167,9 +175,50 @@ if skin_a and skin_b:
             f"{metrics_b.volatility:.2f}%",
             f"{metrics_b.max_drawdown:.2f}%",
             f"${metrics_b.standard_deviation:.2f}",
+            f"{metrics_b.sharpe_ratio:.2f}",
         ],
     }
 
-    import pandas as pd
     comparison_df = pd.DataFrame(comparison_data).set_index("Metric")
     st.table(comparison_df)
+    st.divider()
+
+    st.subheader("Correlation Analysis")
+
+    correlation_value = correlation_analyzer.correlation
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+            "Pearson Correlation",
+            f"{correlation_value:.3f}"
+        )
+
+    with col2:
+        st.metric(
+            "Relationship",
+            correlation_analyzer.correlation_strength
+        )
+
+    st.caption(f"Calculated from {correlation_analyzer.observation_count} ""overlapping observations")
+
+    st.subheader("Return Correlation Scatter Plot")
+
+    returns_df = correlation_analyzer.return_pairs
+
+    fig = px.scatter(
+        returns_df,
+        x="return_a",
+        y="return_b",
+        labels={
+            "return_a": f"{skin_a.name} Daily Return",
+            "return_b": f"{skin_b.name} Daily Return",
+        },
+        title="Daily Return Relationship",
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )

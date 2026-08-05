@@ -2,7 +2,52 @@
 
 All notable changes to QuantStrike will be documented in this file.
 
-## [Unreleased]
+## [v1.1.0] - 2026-08-05
+
+### Added
+
+#### Analytics Page Improvements
+- Added two-skin comparison analytics dashboard.
+- Added comparison table for:
+  - Current price
+  - Weekly return
+  - Monthly return
+  - Annual return
+  - CAGR
+  - Daily volatility
+  - Maximum drawdown
+  - Standard deviation
+  - Sharpe ratio
+
+#### Correlation Analysis
+- Added Pearson return correlation analysis between two skins.
+- Added correlation strength classification.
+- Added observation count to provide statistical context.
+- Added return correlation scatter plot visualization.
+
+#### Quantitative Metrics
+- Added Sharpe Ratio calculation to `MarketMetrics`.
+- Sharpe Ratio assumes a risk-free rate of 0 because CS skins do not have a traditional risk-free alternative.
+- Documented assumptions behind applying financial metrics to CS skin markets.
+
+### Improved
+
+#### Analytics Architecture
+- Expanded quantitative analysis capabilities.
+- Improved separation between:
+  - Market data collection
+  - Financial calculations
+  - Correlation analysis
+  - Frontend visualization
+
+### Notes
+
+This release advances QuantStrike from a historical price tracking tool into a quantitative market analysis platform for CS skin markets.
+
+
+---
+
+## [1.0.0] - 2026-08-02
 
 ### Added
 - Historical price chart with range selector (1W / 1M / 3M / 1Y / All)
@@ -11,15 +56,41 @@ All notable changes to QuantStrike will be documented in this file.
 - Support for vanilla items (knives/gloves with no finish or wear condition)
 - Variant selector (Normal / StatTrak™ / Souvenir) now correctly filters to only
   the variants that actually exist for a given skin
+- Rotating placeholder text in the search box (locked per session via
+  `st.session_state`)
+- "Coming soon" pages for Market, Skin, Portfolio, and Analytics, so sidebar
+  navigation no longer shows blank pages
+- Curated 928-item demo dataset (`data/demo/`) for fast deployment on
+  Streamlit Cloud, built via `scripts/build_demo_dataset.py`
+- Info expander on the home page listing example searchable skins in the
+  demo dataset, generated dynamically from the loaded index
+- Deployed live on Streamlit Community Cloud
 
 ### Fixed
 - `parse_name()` no longer silently returns `None` for valid skin names
   (unreachable `return` inside a dead `else` branch)
+- `parse_name()` now correctly handles vanilla knives/gloves (names with no
+  `" | "` separator) instead of raising `ValueError`
 - Variant/condition selection no longer throws `NameError` when a search
   returns no results
 - Removed duplicated "Market Statistics" and skin-info block in `Home.py`
 - Non-wear items (e.g. stickers with tournament/edition names instead of wear
   conditions) no longer produce an empty condition dropdown
+- Search box now tolerates a full name with condition (e.g.
+  `"Desert Eagle | Blaze (Factory New)"`) by stripping the trailing
+  parenthetical before matching
+- Fixed missing `@property` decorator on `average_price`
+- Consistent 4-column grid for Market Statistics metrics (was an uneven
+  3+2 split)
+- Replaced hardcoded local Windows paths with relative, deployment-safe paths
+- Flattened repository structure (removed redundant nested `QuantStrike/`
+  folder) to match Streamlit Cloud's expected entrypoint path
+- Moved `requirements.txt` to the repo root so Streamlit Cloud installs
+  dependencies correctly (previously nested too deep to be detected)
+- Pinned Python version via Streamlit Cloud's Advanced Settings to avoid
+  incompatibility with newer Python releases lacking wheels for key
+  dependencies (plotly, pandas)
+- Removed accidentally tracked `__pycache__`/`.pyc` files from version control
 
 ### Known issues
 - A small number of dataset entries (e.g. some stickers) have incomplete or
