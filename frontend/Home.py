@@ -162,104 +162,273 @@ if query:
 # Display analytics
 # ============================
 if skin:
-    st.divider()
-    st.header(skin.name)
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.write(f"**Weapon:** {skin.weapon}")
-        st.write(f"**Finish:** {skin.finish}")
-    with col2:
-        st.write(f"**Condition:** {skin.condition}")
-        st.write(f"**StatTrak:** {skin.stattrak}")
-    with col3:
-        st.write(f"**Souvenir:** {skin.souvenir}")
+    st.divider()
 
     collector = CSVCollector()
     history = collector.load_history(skin.history_file)
     metrics = MarketMetrics(history)
 
-    # -----------------------------
-    # Historical price chart
-    # -----------------------------
+    # ============================
+    # Quick Summary
+    # ============================
+
+    st.header(skin.name)
+
+    st.caption(
+        f"{skin.weapon} | {skin.finish} | "
+        f"{skin.condition}"
+    )
+
+    summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+
+    with summary_col1:
+        st.metric(
+            "Current Price",
+            f"${metrics.current_price:.2f}"
+        )
+
+    with summary_col2:
+        st.metric(
+            "Daily Change",
+            f"{metrics.daily_change_percent:.2f}%"
+        )
+
+    with summary_col3:
+        st.metric(
+            "Annual Return",
+            f"{metrics.annual_return:.2f}%"
+        )
+
+    with summary_col4:
+        st.metric(
+            "CAGR",
+            f"{metrics.cagr:.2f}%"
+        )
+
+
+    # ============================
+    # Chart + Key Statistics
+    # ============================
+
     st.divider()
-    st.subheader("Historical Price Chart")
 
-    range_choice = st.radio(
-        "Range",
-        ["1W", "1M", "3M", "1Y", "3Y", "5Y", "All"],
-        horizontal=True
-    )
+    chart_col, info_col = st.columns([3,1])
 
-    RANGE_DAYS = {"1W": 7, "1M": 30, "3M": 90, "1Y": 365, "3Y": 365*3, "5Y": 365*5, "All": None}
-    days = RANGE_DAYS[range_choice]
 
-    if days:
-        cutoff = metrics.history[-1].timestamp - timedelta(days=days)
-        filtered = [p for p in metrics.history if p.timestamp >= cutoff]
-    else:
-        filtered = metrics.history
+    with chart_col:
 
-    fig = go.Figure(data=go.Scatter(
-        x=[p.timestamp for p in filtered],
-        y=[p.price for p in filtered],
-        mode="lines"
-    ))
-    fig.update_layout(
-        xaxis_title="Date",
-        yaxis_title="Price ($)",
-        margin=dict(l=20, r=20, t=20, b=20)
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        st.subheader("Historical Price Chart")
 
-    # -----------------------------
+        range_choice = st.radio(
+            "Range",
+            ["1W", "1M", "3M", "1Y", "3Y", "5Y", "All"],
+            horizontal=True
+        )
+
+
+        RANGE_DAYS = {
+            "1W":7,
+            "1M":30,
+            "3M":90,
+            "1Y":365,
+            "3Y":365*3,
+            "5Y":365*5,
+            "All":None
+        }
+
+        days = RANGE_DAYS[range_choice]
+
+
+        if days:
+            cutoff = (
+                metrics.history[-1].timestamp
+                - timedelta(days=days)
+            )
+
+            filtered = [
+                p for p in metrics.history
+                if p.timestamp >= cutoff
+            ]
+
+        else:
+            filtered = metrics.history
+
+
+        fig = go.Figure(
+            data=go.Scatter(
+                x=[p.timestamp for p in filtered],
+                y=[p.price for p in filtered],
+                mode="lines"
+            )
+        )
+
+
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Price ($)",
+            margin=dict(
+                l=10,
+                r=10,
+                t=20,
+                b=10
+            ),
+            height=400
+        )
+
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+
+    with info_col:
+
+        st.subheader("Overview")
+
+        st.metric(
+            "All Time High",
+            f"${metrics.all_time_high:.2f}"
+        )
+
+        st.metric(
+            "All Time Low",
+            f"${metrics.all_time_low:.2f}"
+        )
+
+        st.metric(
+            "52W High",
+            f"${metrics.high_52w:.2f}"
+        )
+
+        st.metric(
+            "Average Price",
+            f"${metrics.average_price:.2f}"
+        )
+
+
+    # ============================
     # Market Statistics
-    # -----------------------------
-    st.divider()
-    st.subheader("Market Statistics")
+    # ============================
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Current Price", f"${metrics.current_price:.2f}")
-    with col2:
-        st.metric("Daily Change", f"${metrics.daily_change:.2f}")
-    with col3:
-        st.metric("Daily Change %", f"{metrics.daily_change_percent:.2f}%")
-    with col4:
-        st.metric("Average Price", f"${metrics.average_price:.2f}")
+    with st.expander(
+        "Market Statistics",
+        expanded=True
+    ):
 
-    col5, col6, col7, col8 = st.columns(4)
-    with col5:
-        st.metric("All Time High", f"${metrics.all_time_high:.2f}")
-    with col6:
-        st.metric("All Time Low", f"${metrics.all_time_low:.2f}")
-    with col7:
-        st.metric("Std. Deviation", f"${metrics.standard_deviation:.2f}")
-    with col8:
-        st.metric("52W High", f"${metrics.high_52w:.2f}")
+        col1,col2,col3,col4 = st.columns(4)
 
-    # -----------------------------
-    # Return & Risk
-    # -----------------------------
-    st.divider()
-    st.subheader("Return & Risk")
+        with col1:
+            st.metric(
+                "Current Price",
+                f"${metrics.current_price:.2f}"
+            )
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Weekly Return", f"{metrics.weekly_return:.2f}%")
-    with col2:
-        st.metric("Monthly Return", f"{metrics.monthly_return:.2f}%")
-    with col3:
-        st.metric("Annual Return", f"{metrics.annual_return:.2f}%")
-    with col4:
-        st.metric("CAGR", f"{metrics.cagr:.2f}%")
+        with col2:
+            st.metric(
+                "Daily Change",
+                f"${metrics.daily_change:.2f}"
+            )
 
-    col5, col6, col7, col8 = st.columns(4)
-    with col5:
-        st.metric("Volatility (daily)", f"{metrics.volatility:.2f}%")
-    with col6:
-        st.metric("Max Drawdown", f"{metrics.max_drawdown:.2f}%")
-    with col7:
-        st.metric("30-Day MA", f"${metrics.moving_average(30):.2f}")
-    with col8:
-        st.metric("90-Day MA", f"${metrics.moving_average(90):.2f}")
+        with col3:
+            st.metric(
+                "Daily Change %",
+                f"{metrics.daily_change_percent:.2f}%"
+            )
+
+        with col4:
+            st.metric(
+                "Std Deviation",
+                f"${metrics.standard_deviation:.2f}"
+            )
+
+
+    # ============================
+    # Performance
+    # ============================
+
+    with st.expander(
+        "Performance Metrics",
+        expanded=True
+    ):
+
+        col1,col2,col3,col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "Weekly Return",
+                f"{metrics.weekly_return:.2f}%"
+            )
+
+        with col2:
+            st.metric(
+                "Monthly Return",
+                f"{metrics.monthly_return:.2f}%"
+            )
+
+        with col3:
+            st.metric(
+                "Annual Return",
+                f"{metrics.annual_return:.2f}%"
+            )
+
+        with col4:
+            st.metric(
+                "CAGR",
+                f"{metrics.cagr:.2f}%"
+            )
+
+
+    # ============================
+    # Risk
+    # ============================
+
+    with st.expander(
+        "⚠ Risk Metrics",
+        expanded=False
+    ):
+
+        col1,col2,col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Volatility",
+                f"{metrics.volatility:.2f}%"
+            )
+
+        with col2:
+            st.metric(
+                "Maximum Drawdown",
+                f"{metrics.max_drawdown:.2f}%"
+            )
+
+        with col3:
+            st.metric(
+                "Standard Deviation",
+                f"${metrics.standard_deviation:.2f}"
+            )
+
+
+    # ============================
+    # Technical Indicators
+    # ============================
+
+    with st.expander(
+        "Technical Indicators",
+        expanded=False
+    ):
+
+        col1,col2 = st.columns(2)
+
+        with col1:
+            st.metric(
+                "30-Day MA",
+                f"${metrics.moving_average(30):.2f}"
+            )
+
+        with col2:
+            st.metric(
+                "90-Day MA",
+                f"${metrics.moving_average(90):.2f}"
+            )
