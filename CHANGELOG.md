@@ -2,7 +2,7 @@
 
 All notable changes to QuantStrike will be documented in this file.
 
-## [v1.1.0] - 2026-08-05
+## [v1.1.0] - 2026-08-06
 
 ### Added
 
