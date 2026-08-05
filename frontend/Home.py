@@ -190,13 +190,13 @@ if skin:
 
     with summary_col2:
         st.metric(
-            "Daily Change",
+            "24H Change",
             f"{metrics.daily_change_percent:.2f}%"
         )
 
     with summary_col3:
         st.metric(
-            "Annual Return",
+            "1Y Return",
             f"{metrics.annual_return:.2f}%"
         )
 
@@ -213,7 +213,7 @@ if skin:
 
     st.divider()
 
-    chart_col, info_col = st.columns([3,1])
+    chart_col = st.container()
 
 
     with chart_col:
@@ -282,32 +282,6 @@ if skin:
             use_container_width=True
         )
 
-
-    with info_col:
-
-        st.subheader("Overview")
-
-        st.metric(
-            "All Time High",
-            f"${metrics.all_time_high:.2f}"
-        )
-
-        st.metric(
-            "All Time Low",
-            f"${metrics.all_time_low:.2f}"
-        )
-
-        st.metric(
-            "52W High",
-            f"${metrics.high_52w:.2f}"
-        )
-
-        st.metric(
-            "Average Price",
-            f"${metrics.average_price:.2f}"
-        )
-
-
     # ============================
     # Market Statistics
     # ============================
@@ -327,13 +301,13 @@ if skin:
 
         with col2:
             st.metric(
-                "Daily Change",
+                "24H Change",
                 f"${metrics.daily_change:.2f}"
             )
 
         with col3:
             st.metric(
-                "Daily Change %",
+                "24H Change %",
                 f"{metrics.daily_change_percent:.2f}%"
             )
 
@@ -369,7 +343,7 @@ if skin:
 
         with col3:
             st.metric(
-                "Annual Return",
+                "1Y Return",
                 f"{metrics.annual_return:.2f}%"
             )
 
