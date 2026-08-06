@@ -355,15 +355,58 @@ if skin_a and skin_b:
 
 st.subheader("Drawdown Analysis")
 
-selected_dd_skin = st.radio(
-    "Select skin for drawdown analysis",
-    [
-        skin_a.name,
-        skin_b.name
-    ],
-    horizontal=True,
-    key="drawdown_skin"
-)
+if skin_a and skin_b:
+
+    st.divider()
+
+    st.subheader("Drawdown Analysis")
+
+    selected_dd_skin = st.radio(
+        "Select skin for drawdown analysis",
+        [
+            skin_a.name,
+            skin_b.name
+        ],
+        horizontal=True,
+        key="drawdown_skin"
+    )
+
+    if selected_dd_skin == skin_a.name:
+        risk = RiskAnalyzer(history_a)
+    else:
+        risk = RiskAnalyzer(history_b)
+
+    drawdown_df = risk.drawdown_data
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=drawdown_df["timestamp"],
+            y=drawdown_df["drawdown"],
+            mode="lines",
+            name="Drawdown (%)",
+            fill="tozeroy"
+        )
+    )
+
+    fig.update_layout(
+        title=f"{selected_dd_skin} Historical Drawdown",
+        xaxis_title="Date",
+        yaxis_title="Drawdown (%)",
+        hovermode="x unified",
+        margin=dict(
+            l=20,
+            r=20,
+            t=40,
+            b=20
+        )
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
 
 if selected_dd_skin == skin_a.name:
