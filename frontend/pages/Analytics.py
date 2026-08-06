@@ -409,10 +409,10 @@ if skin_a and skin_b:
     )
 
 
-if selected_dd_skin == skin_a.name:
-    risk = RiskAnalyzer(history_a)
-else:
-    risk = RiskAnalyzer(history_b)
+    if selected_dd_skin == skin_a.name:
+        risk = RiskAnalyzer(history_a)
+    else:
+        risk = RiskAnalyzer(history_b)
 
 
 drawdown_df = risk.drawdown_data
