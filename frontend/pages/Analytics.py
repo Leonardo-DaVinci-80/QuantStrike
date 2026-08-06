@@ -353,14 +353,6 @@ if skin_a and skin_b:
 
     st.divider()
 
-st.subheader("Drawdown Analysis")
-
-if skin_a and skin_b:
-
-    st.divider()
-
-    st.subheader("Drawdown Analysis")
-
     selected_dd_skin = st.radio(
         "Select skin for drawdown analysis",
         [
