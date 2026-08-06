@@ -415,7 +415,7 @@ if skin_a and skin_b:
         risk = RiskAnalyzer(history_b)
 
 
-drawdown_df = risk.drawdown_data
+    drawdown_df = risk.drawdown_data
 
 
 fig = go.Figure()
