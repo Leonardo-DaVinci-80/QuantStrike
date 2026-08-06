@@ -8,6 +8,10 @@ sys.path.append(str(ROOT))
 import streamlit as st  # type: ignore
 from backend.repositories.skin_repository import SkinRepository
 from backend.analytics.correlation import CorrelationAnalyzer
+from backend.analytics.performance import PerformanceAnalyzer
+import plotly.graph_objects as go
+from backend.analytics.technical import TechnicalAnalyzer
+from backend.analytics.risk import RiskAnalyzer
 
 
 st.set_page_config(page_title="QuantStrike — Analytics", layout="wide")
@@ -141,7 +145,7 @@ if skin_a and skin_b:
 
     st.divider()
 
-    st.subheader("Performance Comparison")
+    st.subheader("Performance Metrics")
 
     comparison_data = {
         "Metric": [
@@ -181,6 +185,130 @@ if skin_a and skin_b:
 
     comparison_df = pd.DataFrame(comparison_data).set_index("Metric")
     st.table(comparison_df)
+
+    st.divider()
+
+    st.subheader("Relative Performance")
+
+    performance = PerformanceAnalyzer(
+            history_a,
+            history_b
+        )
+
+    performance_df = performance.normalized_returns
+
+    fig = go.Figure()
+
+    fig.add_trace(
+            go.Scatter(
+                x=performance_df["timestamp"],
+                y=performance_df["asset_a_normalized"],
+                mode="lines",
+                name=skin_a.name
+            )
+        )
+
+    fig.add_trace(
+            go.Scatter(
+                x=performance_df["timestamp"],
+                y=performance_df["asset_b_normalized"],
+                mode="lines",
+                name=skin_b.name
+            )
+        )
+
+    fig.update_layout(
+            title="Normalized Price Performance (Starting Value = 100)",
+            xaxis_title="Date",
+            yaxis_title="Growth (%)",
+            hovermode="x unified",
+            margin=dict(
+                l=20,
+                r=20,
+                t=40,
+                b=20
+            )
+        )
+
+    st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+    st.divider()
+
+    st.subheader("Moving Average Analysis")
+
+    selected_ma_skin = st.radio(
+        "Select skin",
+        [
+            skin_a.name,
+            skin_b.name
+        ],
+        horizontal=True
+    )
+
+    if selected_ma_skin == skin_a.name:
+        technical = TechnicalAnalyzer(history_a)
+    else:
+        technical = TechnicalAnalyzer(history_b)
+
+
+    ma_df = technical.moving_average_data
+
+
+    fig = go.Figure()
+
+
+    fig.add_trace(
+        go.Scatter(
+            x=ma_df["timestamp"],
+            y=ma_df["price"],
+            name="Price",
+            mode="lines"
+        )
+    )
+
+
+    fig.add_trace(
+        go.Scatter(
+            x=ma_df["timestamp"],
+            y=ma_df["MA30"],
+            name="30 Day MA",
+            mode="lines"
+        )
+    )
+
+
+    fig.add_trace(
+        go.Scatter(
+            x=ma_df["timestamp"],
+            y=ma_df["MA90"],
+            name="90 Day MA",
+            mode="lines"
+        )
+    )
+
+
+    fig.update_layout(
+        title=f"{selected_ma_skin} Moving Average Trend",
+        xaxis_title="Date",
+        yaxis_title="Price ($)",
+        hovermode="x unified",
+        margin=dict(
+            l=20,
+            r=20,
+            t=40,
+            b=20
+        )
+    )
+
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
     st.divider()
 
     st.subheader("Correlation Analysis")
@@ -222,3 +350,60 @@ if skin_a and skin_b:
         fig,
         use_container_width=True
     )
+
+    st.divider()
+
+st.subheader("Drawdown Analysis")
+
+selected_dd_skin = st.radio(
+    "Select skin for drawdown analysis",
+    [
+        skin_a.name,
+        skin_b.name
+    ],
+    horizontal=True,
+    key="drawdown_skin"
+)
+
+
+if selected_dd_skin == skin_a.name:
+    risk = RiskAnalyzer(history_a)
+else:
+    risk = RiskAnalyzer(history_b)
+
+
+drawdown_df = risk.drawdown_data
+
+
+fig = go.Figure()
+
+
+fig.add_trace(
+    go.Scatter(
+        x=drawdown_df["timestamp"],
+        y=drawdown_df["drawdown"],
+        mode="lines",
+        name="Drawdown (%)",
+        fill="tozeroy"
+    )
+)
+
+
+fig.update_layout(
+    title=f"{selected_dd_skin} Historical Drawdown",
+    xaxis_title="Date",
+    yaxis_title="Drawdown (%)",
+    hovermode="x unified",
+    margin=dict(
+        l=20,
+        r=20,
+        t=40,
+        b=20
+    )
+)
+
+
+st.plotly_chart(
+    fig,
+    use_container_width=True
+)
