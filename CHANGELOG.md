@@ -2,6 +2,26 @@
 
 All notable changes to QuantStrike will be documented in this file.
 
+## v1.2.0 — Advanced Analytics Update
+
+### Added
+- Relative performance comparison chart (normalized returns)
+- 30-day and 90-day moving average analysis
+- Interactive drawdown visualization
+- Risk analysis module
+- Technical analysis module
+- Performance comparison enhancements
+
+### Improved
+- Analytics page layout and organization
+- Interactive chart selection
+- Overall user experience for comparing skins
+
+### Fixed
+- Resolved duplicate chart rendering
+- Fixed analytics page stability issues
+- Improved chart reliability
+
 ## [v1.1.0] - 2026-08-06
 
 ### Added
