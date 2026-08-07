@@ -39,15 +39,32 @@ def load_repository():
     )
 
 repo = load_repository()
-with st.expander("ℹ️ This is a demo — which skins are searchable?"):
+with st.expander("ℹ️ Demo Dataset — Available Skins"):
     st.write(
         f"This deployed version uses a curated subset of the full dataset "
-        f"({len(repo.index)} items) to keep load times fast. A few examples:"
+        f"({len(repo.index):,} items) to keep load times fast. "
+        f"The dataset includes popular weapons, knives, and collectibles. "
+        f"Examples:"
     )
-    sample = repo.index["name"].str.split(" (", regex=False).str[0].str.replace(
-        "StatTrak™ ", "", regex=False
-    ).str.replace("Souvenir ", "", regex=False).drop_duplicates().sample(8, random_state=1)
-    st.write(", ".join(sample.tolist()))
+
+    featured_skins = [
+        "AK-47 | Fire Serpent",
+        "AK-47 | Vulcan",
+        "AWP | Asiimov",
+        "M4A4 | Neo-Noir",
+        "M4A1-S | Printstream",
+        "Karambit | Doppler",
+        "Butterfly Knife | Fade",
+        "M9 Bayonet | Lore",
+    ]
+
+    available = [
+        skin
+        for skin in featured_skins
+        if any(skin in name for name in repo.index["name"])
+    ]
+
+    st.write(", ".join(available))
     
 PLACEHOLDER_SKINS = [
     "Redline",
