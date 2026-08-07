@@ -232,7 +232,8 @@ if skin_a and skin_b:
 
     st.plotly_chart(
             fig,
-            use_container_width=True
+            use_container_width=True,
+            key="performance_chart"
         )
 
     st.divider()
@@ -306,7 +307,8 @@ if skin_a and skin_b:
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        use_container_width=True,
+        key="moving_average_chart"
     )
 
     st.divider()
@@ -348,7 +350,8 @@ if skin_a and skin_b:
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        use_container_width=True,
+        key="correlation_chart"
     )
 
     st.divider()
@@ -397,48 +400,6 @@ if skin_a and skin_b:
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        use_container_width=True,
+        key="drawdown_chart"
     )
-
-
-    if selected_dd_skin == skin_a.name:
-        risk = RiskAnalyzer(history_a)
-    else:
-        risk = RiskAnalyzer(history_b)
-
-
-    drawdown_df = risk.drawdown_data
-
-
-fig = go.Figure()
-
-
-fig.add_trace(
-    go.Scatter(
-        x=drawdown_df["timestamp"],
-        y=drawdown_df["drawdown"],
-        mode="lines",
-        name="Drawdown (%)",
-        fill="tozeroy"
-    )
-)
-
-
-fig.update_layout(
-    title=f"{selected_dd_skin} Historical Drawdown",
-    xaxis_title="Date",
-    yaxis_title="Drawdown (%)",
-    hovermode="x unified",
-    margin=dict(
-        l=20,
-        r=20,
-        t=40,
-        b=20
-    )
-)
-
-
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
