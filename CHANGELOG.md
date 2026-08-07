@@ -2,27 +2,25 @@
 
 All notable changes to QuantStrike will be documented in this file.
 
-## v1.2.0 — Advanced Analytics Update
+## v1.2.0 - Advanced Analytics Update
 
 ### Added
-- Relative performance comparison chart (normalized returns)
-- 30-day and 90-day moving average analysis
-- Interactive drawdown visualization
-- Risk analysis module
-- Technical analysis module
-- Performance comparison enhancements
+- Expanded demo dataset to ~9,500 CS2 skins
+- Moving average trend analysis (30D / 90D)
+- Historical drawdown visualization
+- Interactive performance comparison charts
+- Return correlation scatter plot
+- Additional quantitative risk analysis tools
 
 ### Improved
-- Analytics page layout and organization
-- Interactive chart selection
-- Overall user experience for comparing skins
+- Analytics dashboard now provides deeper market analysis
+- Increased searchable skin coverage
+- Improved comparison experience between assets
 
-### Fixed
-- Resolved duplicate chart rendering
-- Fixed analytics page stability issues
-- Improved chart reliability
+### Removed
+- Removed redundant backend analytics files
 
-## [v1.1.0] - 2026-08-06
+## [v1.1.0] - 2026-08-05
 
 ### Added
 
