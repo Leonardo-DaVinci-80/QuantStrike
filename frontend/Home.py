@@ -23,6 +23,7 @@ st.set_page_config(
     page_title="QuantStrike",
     layout="wide"
 )
+
 st.title("📈 QuantStrike")
 st.caption("CS:GO Market Intelligence Platform")
 st.caption(
