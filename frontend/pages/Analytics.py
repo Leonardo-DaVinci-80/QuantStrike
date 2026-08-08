@@ -13,15 +13,13 @@ import plotly.graph_objects as go
 from backend.analytics.technical import TechnicalAnalyzer
 from backend.analytics.risk import RiskAnalyzer
 
-
 st.set_page_config(page_title="QuantStrike — Analytics", layout="wide")
 
 st.title("📊 Analytics")
-st.caption("Compare two skins side by side: return, volatility, correlation, and drawdown.")
+st.caption("Compare two skins across performance, trends, correlation, and risk.")
 
 INDEX_FILE = str(ROOT / "data" / "demo" / "item_index.csv")
 ITEMS_DIRECTORY = str(ROOT / "data" / "demo" / "items")
-
 
 @st.cache_resource
 def load_repository():
@@ -30,9 +28,7 @@ def load_repository():
         items_directory=ITEMS_DIRECTORY
     )
 
-
 repo = load_repository()
-
 
 def skin_picker(label_prefix: str):
     """Reusable search -> variant -> condition -> skin picker."""
@@ -96,7 +92,6 @@ def skin_picker(label_prefix: str):
         prefix = "StatTrak™ "
     elif selected_variant == "Souvenir":
         prefix = "Souvenir "
-
     if selected_condition == "Vanilla":
         final_name = f"{prefix}{selected_skin}"
     else:
@@ -107,7 +102,6 @@ def skin_picker(label_prefix: str):
     except ValueError as e:
         st.error(str(e))
         return None
-
 
 col1, col2 = st.columns(2)
 
@@ -125,7 +119,6 @@ if skin_a and skin_b:
 
     from backend.collectors.csv_collector import CSVCollector
     from backend.analytics.market_metrics import MarketMetrics
-
     collector = CSVCollector()
 
     try:
@@ -144,7 +137,6 @@ if skin_a and skin_b:
         st.stop()
 
     st.divider()
-
     st.subheader("Performance Metrics")
 
     comparison_data = {
@@ -187,14 +179,12 @@ if skin_a and skin_b:
     st.table(comparison_df)
 
     st.divider()
-
     st.subheader("Relative Performance")
 
     performance = PerformanceAnalyzer(
             history_a,
             history_b
         )
-
     performance_df = performance.normalized_returns
 
     fig = go.Figure()
@@ -218,9 +208,9 @@ if skin_a and skin_b:
         )
 
     fig.update_layout(
-            title="Normalized Price Performance (Starting Value = 100)",
+            title="Relative Price Performance (Starting Value = 100)",
             xaxis_title="Date",
-            yaxis_title="Growth (%)",
+            yaxis_title="Normalized Value",
             hovermode="x unified",
             margin=dict(
                 l=20,
@@ -237,8 +227,8 @@ if skin_a and skin_b:
         )
 
     st.divider()
-
     st.subheader("Moving Average Analysis")
+    st.caption("30D MA shows the short-term trend; 90D MA shows the longer-term trend.")
 
     selected_ma_skin = st.radio(
         "Select skin",
@@ -254,12 +244,8 @@ if skin_a and skin_b:
     else:
         technical = TechnicalAnalyzer(history_b)
 
-
     ma_df = technical.moving_average_data
-
-
     fig = go.Figure()
-
 
     fig.add_trace(
         go.Scatter(
@@ -270,26 +256,23 @@ if skin_a and skin_b:
         )
     )
 
-
     fig.add_trace(
         go.Scatter(
             x=ma_df["timestamp"],
             y=ma_df["MA30"],
-            name="30 Day MA",
+            name="30 Day Moving Average",
             mode="lines"
         )
     )
-
 
     fig.add_trace(
         go.Scatter(
             x=ma_df["timestamp"],
             y=ma_df["MA90"],
-            name="90 Day MA",
+            name="90 Day Moving Average",
             mode="lines"
         )
     )
-
 
     fig.update_layout(
         title=f"{selected_ma_skin} Moving Average Trend",
@@ -304,7 +287,6 @@ if skin_a and skin_b:
         )
     )
 
-
     st.plotly_chart(
         fig,
         use_container_width=True,
@@ -312,11 +294,9 @@ if skin_a and skin_b:
     )
 
     st.divider()
-
     st.subheader("Correlation Analysis")
-
+    st.caption("Pearson correlation measures how closely the skins' daily returns move together. ""Values closer to +1 indicate stronger positive co-movement.")
     correlation_value = correlation_analyzer.correlation
-
     col1, col2 = st.columns(2)
 
     with col1:
@@ -332,9 +312,7 @@ if skin_a and skin_b:
         )
 
     st.caption(f"Calculated from {correlation_analyzer.observation_count} ""overlapping observations")
-
     st.subheader("Return Correlation Scatter Plot")
-
     returns_df = correlation_analyzer.return_pairs
 
     fig = px.scatter(
@@ -365,12 +343,11 @@ if skin_a and skin_b:
         horizontal=True,
         key="drawdown_skin"
     )
-
+    st.caption("Drawdown measures the percentage decline from a previous peak. ""More negative values indicate larger losses from peak value.")
     if selected_dd_skin == skin_a.name:
         risk = RiskAnalyzer(history_a)
     else:
         risk = RiskAnalyzer(history_b)
-
     drawdown_df = risk.drawdown_data
 
     fig = go.Figure()
@@ -402,4 +379,61 @@ if skin_a and skin_b:
         fig,
         use_container_width=True,
         key="drawdown_chart"
+    )
+
+    st.divider()
+    st.subheader("Risk vs Return")
+    st.caption(
+        "Annualized return compared with daily volatility. "
+        "Use alongside drawdown and Sharpe ratio when evaluating risk-adjusted performance."
+    )
+
+    risk_return_df = pd.DataFrame({
+        "Skin": [
+            skin_a.name,
+            skin_b.name
+        ],
+        "Annual Return (%)": [
+            metrics_a.annual_return,
+            metrics_b.annual_return
+        ],
+        "Daily Volatility (%)": [
+            metrics_a.volatility,
+            metrics_b.volatility
+        ]
+    })
+
+    fig = px.scatter(
+        risk_return_df,
+        x="Daily Volatility (%)",
+        y="Annual Return (%)",
+        text="Skin",
+        title="Risk vs Return Profile"
+    )
+
+    fig.update_traces(
+        marker=dict(size=14),
+        textposition="top center"
+    )
+
+    fig.add_hline(
+        y=0,
+        line_dash="dash",
+        opacity=0.5
+    )
+
+    fig.update_layout(
+        hovermode="closest",
+        margin=dict(
+            l=20,
+            r=20,
+            t=40,
+            b=20
+        )
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key="risk_return_chart"
     )
