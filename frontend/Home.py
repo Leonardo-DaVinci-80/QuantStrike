@@ -67,18 +67,49 @@ with st.expander("ℹ️ Demo Dataset — Available Skins"):
     st.write(", ".join(available))
     
 PLACEHOLDER_SKINS = [
-    "Redline",
-    "Aquamarine Revenge",
-    "Printstream",
-    "Vulcan",
-    "Asiimov",
-    "Fire Serpent",
-    "Doppler",
-    "Fade",
-    "Hyper Beast",
-    "Neo-Noir",
+    "AK-47 | Redline",
+    "AK-47 | Fire Serpent",
+    "AK-47 | Vulcan",
+    "AWP | Asiimov",
+    "M4A1-S | Printstream",
+    "USP-S | Kill Confirmed",
+    "★ Karambit | Doppler",
+    "★ Butterfly Knife | Fade",
+    "★ M9 Bayonet | Lore",
+    "Desert Eagle | Blaze",
+    "Sealed Graffiti | Karambit",
+    "Clutch Case",
+    "10 Year Birthday Sticker Capsule",
 ]
 
+st.markdown(
+    """
+    <style>
+    @keyframes placeholderFade {
+        0% {
+            opacity: 0;
+        }
+        15% {
+            opacity: 1;
+        }
+        85% {
+            opacity: 1;
+        }
+        100% {
+            opacity: 0;
+        }
+    }
+
+    .search-hint {
+        font-size: 0.85rem;
+        color: rgba(128, 128, 128, 0.8);
+        margin-bottom: 0.25rem;
+    }
+    </style>
+
+    """,
+    unsafe_allow_html=True
+)
 if "search_placeholder" not in st.session_state:
     st.session_state.search_placeholder = random.choice(PLACEHOLDER_SKINS)
 
@@ -119,20 +150,28 @@ if query:
         # -----------------------------
         # Select condition
         # -----------------------------
+
         conditions = []
+
         for variant in variants:
+
             is_selected_variant = False
+
             if selected_variant == "StatTrak™":
                 is_selected_variant = variant["stattrak"]
+
             elif selected_variant == "Souvenir":
                 is_selected_variant = variant["souvenir"]
+
             elif selected_variant == "Normal":
                 is_selected_variant = (
                     not variant["stattrak"]
                     and not variant["souvenir"]
                 )
+
             if is_selected_variant:
                 conditions.append(variant["condition"])
+
 
         WEAR_ORDER = [
             "Vanilla",
@@ -143,15 +182,37 @@ if query:
             "Battle-Scarred"
         ]
 
-        conditions = [
+        # Remove duplicates while preserving proper CS2 wear order
+        available_conditions = [
             wear
             for wear in WEAR_ORDER
             if wear in set(conditions)
         ]
 
+        # Safety fallback for unusual items
+        if not available_conditions:
+            available_conditions = sorted(set(conditions))
+
+
+        # Create a unique key for this skin + variant
+        condition_key = (
+            f"{selected_skin}_{selected_variant}_condition"
+        )
+
+        # If the previously selected condition is no longer
+        # available, reset it to the first valid condition.
+        if (
+            condition_key not in st.session_state
+            or st.session_state[condition_key]
+            not in available_conditions
+        ):
+            st.session_state[condition_key] = available_conditions[0]
+
+
         selected_condition = st.selectbox(
             "Select condition",
-            conditions
+            available_conditions,
+            key=condition_key
         )
 
         # -----------------------------

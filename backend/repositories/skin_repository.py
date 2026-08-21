@@ -74,22 +74,46 @@ class SkinRepository:
                 .replace("★", "")
             )
 
-        # Strip a trailing "(...)" condition if the user pasted a full name
-        query = re.sub(r"\s*\([^)]*\)\s*$", "", query.strip())
+        # Strip a trailing wear condition if the user pasted a full name
+        wear_conditions = {
+            "Factory New",
+            "Minimal Wear",
+            "Field-Tested",
+            "Well-Worn",
+            "Battle-Scarred",
+        }
+
+        query = query.strip()
+
+        for condition in wear_conditions:
+            suffix = f" ({condition})"
+
+            if query.lower().endswith(suffix.lower()):
+                query = query[:-len(suffix)]
+                break
 
         query = normalize(query)
 
         names = []
 
         for name in self.index["name"]:
+
+            attributes = self.parse_name(name)
+
             cleaned = (
                 name
                 .replace("StatTrak™ ", "")
                 .replace("Souvenir ", "")
             )
-            base = cleaned.rsplit(" (", 1)[0]
+
+            # Remove ONLY actual wear conditions
+            if attributes["condition"] in wear_conditions:
+                base = cleaned.rsplit(" (", 1)[0]
+            else:
+                base = cleaned
 
             if query in normalize(base):
+
                 if base not in names:
                     names.append(base)
 
@@ -130,6 +154,7 @@ class SkinRepository:
         """
         Parse a Steam market item name into structured attributes.
         """
+
         stattrak = name.startswith("StatTrak™")
         souvenir = name.startswith("Souvenir")
 
@@ -139,8 +164,15 @@ class SkinRepository:
             .replace("Souvenir ", "")
         )
 
+        wear_conditions = {
+            "Factory New",
+            "Minimal Wear",
+            "Field-Tested",
+            "Well-Worn",
+            "Battle-Scarred",
+        }
+
         if " | " not in cleaned:
-            # Vanilla knife/glove — no finish, no wear condition
             return {
                 "weapon": cleaned,
                 "finish": None,
@@ -151,13 +183,20 @@ class SkinRepository:
 
         weapon, remainder = cleaned.split(" | ", 1)
 
-        if " (" not in remainder:
-            # Has a finish but no wear condition
-            finish = remainder
-            condition = "Vanilla"
-        else:
-            finish, condition = remainder.rsplit(" (", 1)
-            condition = condition.rstrip(")")
+        # Only interpret parentheses as wear conditions
+        # when they contain an actual CS2 wear condition.
+        condition = "Vanilla"
+        finish = remainder
+
+        if remainder.endswith(")"):
+            match = re.search(r"\(([^()]*)\)$", remainder)
+
+            if match:
+                possible_condition = match.group(1)
+
+                if possible_condition in wear_conditions:
+                    condition = possible_condition
+                    finish = remainder[:match.start()].rstrip()
 
         return {
             "weapon": weapon,
@@ -171,9 +210,19 @@ class SkinRepository:
 
         variants = []
 
+        wear_conditions = {
+            "Factory New",
+            "Minimal Wear",
+            "Field-Tested",
+            "Well-Worn",
+            "Battle-Scarred",
+        }
+
         for _, row in self.index.iterrows():
 
             name = row["name"]
+
+            attributes = self.parse_name(name)
 
             cleaned = (
                 name
@@ -181,18 +230,20 @@ class SkinRepository:
                 .replace("Souvenir ", "")
             )
 
-            skin_base = cleaned.rsplit(" (", 1)[0]
+            # Remove wear condition only.
+            if attributes["condition"] in wear_conditions:
+                skin_base = cleaned.rsplit(" (", 1)[0]
+            else:
+                skin_base = cleaned
 
             if skin_base == base_name:
-
-                attributes = self.parse_name(name)
 
                 variants.append(
                     {
                         "name": name,
                         "stattrak": attributes["stattrak"],
                         "souvenir": attributes["souvenir"],
-                        "condition": attributes["condition"]
+                        "condition": attributes["condition"],
                     }
                 )
 
