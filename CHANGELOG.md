@@ -2,6 +2,50 @@
 
 All notable changes to QuantStrike will be documented in this file.
 
+## v1.3.0 - Market Intelligence Update — 2026-08-21
+
+### Added
+
+#### Market Overview
+- Added initial Market Overview dashboard.
+- Added historical QuantStrike Index (QSI).
+- Added market-wide return analysis.
+- Added market breadth analysis showing advancing, declining, and unchanged assets.
+- Added initial placeholders for category-level market indices, including:
+  - Rifles
+  - Pistols
+  - SMGs
+  - Machine Guns
+  - Shotguns
+  - Knives
+  - Gloves
+  - Stickers
+  - Agents
+  - Cases
+- Added Top Gainers and Top Losers sections.
+- Added Market Heatmap placeholder.
+
+#### QSI
+- Added equal-weighted QSI methodology with a base value of 1,000.
+- Added a minimum 50% market coverage requirement for QSI calculations.
+- Added a ±50% cap on individual asset returns to reduce the effect of extreme historical outliers.
+- Added QSI diagnostic analysis for market coverage, returns, and index behavior.
+
+#### Market.CSGO
+- Added Market.CSGO price API integration.
+- Added Market.CSGO historical item discovery.
+- Added Market.CSGO historical sales history retrieval.
+- Added coverage testing between Market.CSGO and the QuantStrike tracked dataset.
+- Achieved 96.37% historical coverage across the 9,488 assets tracked by QuantStrike.
+
+### Improved
+- Improved market-wide data processing through a daily price matrix and return matrix.
+- Improved QSI stability by filtering low-coverage periods and capping extreme individual returns.
+
+### Notes
+- Market Overview currently uses the historical QuantStrike dataset.
+- Live Market.CSGO data will be connected in a future update.
+
 ## v1.2.0 - Advanced Analytics Update
 
 ### Added
