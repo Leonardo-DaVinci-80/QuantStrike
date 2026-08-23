@@ -370,7 +370,7 @@ if skin:
         expanded=True
     ):
 
-        col1,col2,col3,col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             st.metric(
@@ -390,9 +390,23 @@ if skin:
                 f"{metrics.daily_change_percent:.2f}%"
             )
 
+        col4, col5, col6 = st.columns(3)
+
         with col4:
             st.metric(
-                "Std Deviation",
+                "All-Time High",
+                f"${metrics.all_time_high:.2f}"
+            )
+
+        with col5:
+            st.metric(
+                "All-Time Low",
+                f"${metrics.all_time_low:.2f}"
+            )
+
+        with col6:
+            st.metric(
+                "Standard Deviation",
                 f"${metrics.standard_deviation:.2f}"
             )
 
@@ -442,7 +456,7 @@ if skin:
         expanded=False
     ):
 
-        col1,col2,col3 = st.columns(3)
+        col1, col2 = st.columns(2)
 
         with col1:
             st.metric(
@@ -454,12 +468,6 @@ if skin:
             st.metric(
                 "Maximum Drawdown",
                 f"{metrics.max_drawdown:.2f}%"
-            )
-
-        with col3:
-            st.metric(
-                "Standard Deviation",
-                f"${metrics.standard_deviation:.2f}"
             )
 
 
