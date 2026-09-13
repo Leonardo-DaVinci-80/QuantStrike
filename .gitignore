@@ -5,3 +5,5 @@ __pycache__/
 data/raw/
 data/processed/
 .streamlit/secrets.toml
+**/market_cache/
+*.pkl

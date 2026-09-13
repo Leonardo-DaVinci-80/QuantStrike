@@ -7,7 +7,7 @@ from backend.models.price_point import PricePoint
 class CSVCollector:
     """Loads historical CS2 market data from CSV files."""
 
-    MIN_PLAUSIBLE_PRICE = 0.10
+    MIN_PLAUSIBLE_PRICE = 0.001
 
     @staticmethod
     def load_history(filepath: str) -> List[PricePoint]:
