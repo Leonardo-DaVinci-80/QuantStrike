@@ -6,8 +6,19 @@ from urllib.parse import unquote
 from backend.models.skin import Skin
 import streamlit as st
 
-@st.cache_data(show_spinner=False)
-def _get_latest_price(filepath: str) -> float:
+@st.cache_data(
+    show_spinner=False,
+    max_entries=5000,
+    ttl=60 * 60 * 24
+)
+def get_latest_price(filepath: str) -> float:
+    """
+    Return the latest valid price from a skin CSV.
+
+    Cached independently so searching for skins does not
+    repeatedly read the same historical CSV files.
+    """
+
     filepath = Path(filepath)
 
     if not filepath.exists():
@@ -16,7 +27,10 @@ def _get_latest_price(filepath: str) -> float:
     try:
         df = pd.read_csv(
             filepath,
-            usecols=["price", "unix timestamp"]
+            usecols=[
+                "price",
+                "unix timestamp"
+            ]
         )
 
         df["price"] = pd.to_numeric(
@@ -30,19 +44,24 @@ def _get_latest_price(filepath: str) -> float:
         )
 
         df = df.dropna(
-            subset=["price", "unix timestamp"]
+            subset=[
+                "price",
+                "unix timestamp"
+            ]
         )
 
-        df = df[df["price"] >= 0.001]
+        df = df[
+            df["price"] >= 0.001
+        ]
 
         if df.empty:
             return 0.0
 
-        latest_row = df.loc[
-            df["unix timestamp"].idxmax()
-        ]
+        latest_index = df["unix timestamp"].idxmax()
 
-        return float(latest_row["price"])
+        return float(
+            df.loc[latest_index, "price"]
+        )
 
     except Exception:
         return 0.0
@@ -57,7 +76,25 @@ class SkinRepository:
         # New Kaggle dataset:
         # "URL encoded name","decoded name"
         self.index["name"] = self.index["decoded name"]
-        self.index["file_name"] = self.index["URL encoded name"] + ".csv"
+        self.index["file_name"] = self.index["URL encoded name"].apply(unquote) + ".csv"
+        self.index["base_name"] = (
+        self.index["name"]
+        .str.replace(
+            "StatTrak™ ",
+            "",
+            regex=False
+        )
+        .str.replace(
+            "Souvenir ",
+            "",
+            regex=False
+        )
+        .str.rsplit(
+            " (",
+            n=1
+        )
+        .str[0]
+    )
 
     def search(self, query: str):
         results = self.index[
@@ -140,7 +177,7 @@ class SkinRepository:
                     / row["file_name"]
                 )
 
-                price = _get_latest_price(str(filepath))
+                price = get_latest_price(str(filepath))
 
                 latest_price = max(
                     latest_price,
