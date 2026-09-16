@@ -161,6 +161,30 @@ class SkinRepository:
             for name, _ in base_prices
         ]
 
+    def find(self, query: str) -> Skin:
+        results = self.index[
+            self.index["name"].str.lower() == query.lower()
+        ]
+
+        if results.empty:
+            raise ValueError(f"No skin found: {query}")
+
+        row = results.iloc[0]
+        attributes = self.parse_name(row["name"])
+
+        return Skin(
+            id=row["file_name"],
+            name=row["name"],
+            weapon=attributes["weapon"],
+            finish=attributes["finish"],
+            condition=attributes["condition"],
+            stattrak=attributes["stattrak"],
+            souvenir=attributes["souvenir"],
+            history_file=str(
+                Path(self.items_directory) / row["file_name"]
+            )
+        )
+
     @staticmethod
     def parse_name(name: str):
         """
