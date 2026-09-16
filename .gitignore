@@ -2,8 +2,13 @@
 __pycache__/
 *.pyc
 .env
-data/raw/
-data/processed/
+
+data/raw/*
+data/processed/*
+
+!data/raw/
+!data/raw/name_conversion_table.csv
+
 .streamlit/secrets.toml
 **/market_cache/
 *.pkl
