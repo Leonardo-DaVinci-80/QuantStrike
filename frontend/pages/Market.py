@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-
+from styles import load_css, render_theme_toggle
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -11,6 +11,8 @@ sys.path.append(str(ROOT))
 
 from backend.repositories.skin_repository import SkinRepository
 from backend.analytics.market_overview import MarketOverviewAnalyzer
+render_theme_toggle()
+load_css()
 
 # =========================================================
 # CONFIG
@@ -21,11 +23,11 @@ st.set_page_config(
 )
 
 INDEX_FILE = str(
-    ROOT / "data" / "demo" / "item_index.csv"
+    ROOT / "data" / "raw" / "name_conversion_table.csv"
 )
 
 ITEMS_DIRECTORY = str(
-    ROOT / "data" / "demo" / "items"
+    ROOT / "data" / "raw" / "items"
 )
 # =========================================================
 # LOAD DATA

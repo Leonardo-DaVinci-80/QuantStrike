@@ -85,16 +85,31 @@ class MarketMetrics:
         return ((last - first) / first) * 100
 
     @property
-    def daily_returns(self):
+    def daily_returns(self) -> List[float]:
+        daily_prices = {}
+
+        for point in self.history:
+            day = point.timestamp.date()
+            daily_prices[day] = point.price
+
+        dates = sorted(daily_prices)
+
         returns = []
-        for previous, current in zip(self.history, self.history[1:]):
-            if previous.price == 0:
+
+        for previous_date, current_date in zip(dates, dates[1:]):
+            previous_price = daily_prices[previous_date]
+            current_price = daily_prices[current_date]
+
+            if previous_price <= 0:
                 continue
-            change = (
-                (current.price - previous.price)
-                / previous.price
+
+            daily_return = (
+                (current_price - previous_price)
+                / previous_price
             ) * 100
-            returns.append(change)
+
+            returns.append(daily_return)
+
         return returns
 
     def _return_over_days(self, days: int) -> float:

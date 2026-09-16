@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from styles import load_css, render_theme_toggle
 
 ROOT = Path(__file__).parent.parent
 sys.path.append(str(ROOT))
@@ -12,9 +13,11 @@ import random
 from datetime import timedelta
 import plotly.graph_objects as go
 import os
+render_theme_toggle()
+load_css()
 
-DEFAULT_INDEX = str(ROOT / "data" / "demo" / "item_index.csv")
-DEFAULT_ITEMS = str(ROOT / "data" / "demo" / "items")
+DEFAULT_INDEX = str(ROOT / "data" / "raw" / "name_conversion_table.csv")
+DEFAULT_ITEMS = str(ROOT / "data" / "raw" / "items")
 
 INDEX_FILE = os.environ.get("QUANTSTRIKE_INDEX_FILE", DEFAULT_INDEX)
 ITEMS_DIRECTORY = os.environ.get("QUANTSTRIKE_ITEMS_DIR", DEFAULT_ITEMS)
@@ -25,10 +28,10 @@ st.set_page_config(
 )
 
 st.title("📈 QuantStrike")
-st.caption("CS:GO Market Intelligence Platform")
+st.caption("Counter-Strike Market Intelligence Platform")
 st.caption(
-    "Historical Steam prices before CS2 release. "
-    "prices may be inaccurate."
+    "Historical Steam prices, data cutoff at 4th May 2024. "
+    "Prices may be inaccurate."
 )
 
 @st.cache_resource

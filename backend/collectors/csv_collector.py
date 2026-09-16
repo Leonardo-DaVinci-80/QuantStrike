@@ -1,8 +1,12 @@
 from datetime import datetime
 from typing import List
 import math
+
 import pandas as pd
+import streamlit as st
+
 from backend.models.price_point import PricePoint
+
 
 class CSVCollector:
     """Loads historical CS2 market data from CSV files."""
@@ -10,34 +14,48 @@ class CSVCollector:
     MIN_PLAUSIBLE_PRICE = 0.001
 
     @staticmethod
+    @st.cache_data(show_spinner=False)
     def load_history(filepath: str) -> List[PricePoint]:
-        df = pd.read_csv(filepath)
-        history = []
+        df = pd.read_csv(
+            filepath,
+            usecols=["price", "quantity", "unix timestamp"]
+        )
 
-        for _, row in df.iterrows():
-            try:
-                price = float(row["price_dollar"])
-                sells = int(row["sells"])
-                timestamp = datetime.fromtimestamp(row["timestamp"] / 1000)
-            except (ValueError, TypeError, OverflowError):
-                continue
+        df["price"] = pd.to_numeric(
+            df["price"],
+            errors="coerce"
+        )
 
-            if not math.isfinite(price) or price < CSVCollector.MIN_PLAUSIBLE_PRICE:
-                continue
+        df["quantity"] = pd.to_numeric(
+            df["quantity"],
+            errors="coerce"
+        )
 
-            if sells < 0:
-                continue
+        df["unix timestamp"] = pd.to_numeric(
+            df["unix timestamp"],
+            errors="coerce"
+        )
 
-            history.append(
-                PricePoint(
-                    timestamp=timestamp,
-                    price=price,
-                    volume=sells,
-                    source="steam_dataset"
-                )
-            )
+        df = df.dropna(
+            subset=["price", "quantity", "unix timestamp"]
+        )
 
-        if not history:
+        df = df[
+            (df["price"] >= CSVCollector.MIN_PLAUSIBLE_PRICE)
+            & (df["quantity"] >= 0)
+        ]
+
+        if df.empty:
             raise ValueError("No valid price history found.")
+
+        history = [
+            PricePoint(
+                timestamp=datetime.fromtimestamp(row["unix timestamp"]),
+                price=float(row["price"]),
+                volume=int(row["quantity"]),
+                source="steam_dataset",
+            )
+            for row in df.itertuples(index=False)
+        ]
 
         return history

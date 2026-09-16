@@ -2,10 +2,28 @@ import shutil
 import kagglehub
 from pathlib import Path
 
-path = kagglehub.dataset_download("leawind/steam-market-price-dataset-csgo")
+
+# Download the dataset
+path = kagglehub.dataset_download(
+    "kieranpoc/counter-strike-market-sale-data"
+)
+
 print("Downloaded to:", path)
 
-dest = Path(__file__).parent.parent / "data" / "raw"
+# Destination inside QuantStrike
+ROOT = Path(__file__).parent.parent
+dest = ROOT / "data" / "raw"
 dest.mkdir(parents=True, exist_ok=True)
-shutil.copytree(Path(path) / "dataset_publish", dest, dirs_exist_ok=True)
+
+# Copy the downloaded dataset directly into data/raw
+source = Path(path)
+
+for item in source.iterdir():
+    target = dest / item.name
+
+    if item.is_dir():
+        shutil.copytree(item, target, dirs_exist_ok=True)
+    else:
+        shutil.copy2(item, target)
+
 print("Copied to:", dest)

@@ -1,9 +1,51 @@
-import base64
 import pandas as pd
 from pathlib import Path
-from backend.models.skin import Skin
 import re
+from urllib.parse import unquote
 
+from backend.models.skin import Skin
+import streamlit as st
+
+@st.cache_data(show_spinner=False)
+def _get_latest_price(filepath: str) -> float:
+    filepath = Path(filepath)
+
+    if not filepath.exists():
+        return 0.0
+
+    try:
+        df = pd.read_csv(
+            filepath,
+            usecols=["price", "unix timestamp"]
+        )
+
+        df["price"] = pd.to_numeric(
+            df["price"],
+            errors="coerce"
+        )
+
+        df["unix timestamp"] = pd.to_numeric(
+            df["unix timestamp"],
+            errors="coerce"
+        )
+
+        df = df.dropna(
+            subset=["price", "unix timestamp"]
+        )
+
+        df = df[df["price"] >= 0.001]
+
+        if df.empty:
+            return 0.0
+
+        latest_row = df.loc[
+            df["unix timestamp"].idxmax()
+        ]
+
+        return float(latest_row["price"])
+
+    except Exception:
+        return 0.0
 
 class SkinRepository:
 
@@ -12,23 +54,14 @@ class SkinRepository:
 
         self.index = pd.read_csv(index_file)
 
-        self.index["name"] = (
-            self.index["item_hash_name_base64"]
-            .apply(self.decode_name)
-        )
-
-
-    @staticmethod
-    def decode_name(value: str) -> str:
-        decoded = base64.b64decode(value)
-
-        return decoded.decode("utf-8")
-
+        # New Kaggle dataset:
+        # "URL encoded name","decoded name"
+        self.index["name"] = self.index["decoded name"]
+        self.index["file_name"] = self.index["URL encoded name"] + ".csv"
 
     def search(self, query: str):
         results = self.index[
-            self.index["name"]
-            .str.contains(
+            self.index["name"].str.contains(
                 query,
                 case=False,
                 na=False,
@@ -39,24 +72,19 @@ class SkinRepository:
         skins = []
 
         for _, row in results.iterrows():
-
             attributes = self.parse_name(row["name"])
 
             skins.append(
                 Skin(
                     id=row["file_name"],
                     name=row["name"],
-
                     weapon=attributes["weapon"],
                     finish=attributes["finish"],
                     condition=attributes["condition"],
-
                     stattrak=attributes["stattrak"],
                     souvenir=attributes["souvenir"],
-
-                    history_file=(
-                        f"{self.items_directory}/"
-                        f"{row['file_name']}"
+                    history_file=str(
+                        Path(self.items_directory) / row["file_name"]
                     )
                 )
             )
@@ -64,91 +92,75 @@ class SkinRepository:
         return skins, results
 
     def search_base_skins(self, query: str):
-
         def normalize(text):
             return (
-                text
+                str(text)
                 .lower()
                 .replace("-", "")
                 .replace(" ", "")
                 .replace("★", "")
             )
 
-        # Strip a trailing wear condition if the user pasted a full name
-        wear_conditions = {
-            "Factory New",
-            "Minimal Wear",
-            "Field-Tested",
-            "Well-Worn",
-            "Battle-Scarred",
-        }
-
-        query = query.strip()
-
-        for condition in wear_conditions:
-            suffix = f" ({condition})"
-
-            if query.lower().endswith(suffix.lower()):
-                query = query[:-len(suffix)]
-                break
-
+        query = re.sub(r"\s*\([^)]*\)\s*$", "", query.strip())
         query = normalize(query)
 
-        names = []
+        base_names = set()
 
         for name in self.index["name"]:
-
-            attributes = self.parse_name(name)
-
             cleaned = (
                 name
                 .replace("StatTrak™ ", "")
                 .replace("Souvenir ", "")
             )
 
-            # Remove ONLY actual wear conditions
-            if attributes["condition"] in wear_conditions:
-                base = cleaned.rsplit(" (", 1)[0]
-            else:
-                base = cleaned
+            base = cleaned.rsplit(" (", 1)[0]
 
             if query in normalize(base):
+                base_names.add(base)
 
-                if base not in names:
-                    names.append(base)
+        base_prices = []
 
-        return names
+        for base_name in base_names:
+            matching_rows = self.index[
+                self.index["name"].apply(
+                    lambda name: (
+                        name
+                        .replace("StatTrak™ ", "")
+                        .replace("Souvenir ", "")
+                        .rsplit(" (", 1)[0]
+                    ) == base_name
+                )
+            ]
 
-    def find(self, query: str) -> Skin:
-        results = self.index[
-            self.index["name"]
-            .str.lower() == query.lower()
+            latest_price = 0.0
+
+            for _, row in matching_rows.iterrows():
+                filepath = (
+                    Path(self.items_directory)
+                    / row["file_name"]
+                )
+
+                price = _get_latest_price(str(filepath))
+
+                latest_price = max(
+                    latest_price,
+                    price
+                )
+
+            base_prices.append(
+                (base_name, latest_price)
+            )
+
+        base_prices.sort(
+            key=lambda x: x[1],
+            reverse=True
+        )
+
+        return [
+            name
+            for name, _ in base_prices
         ]
 
-        if results.empty:
-            raise ValueError(
-                f"No skin found: {query}"
-            )
-
-        row = results.iloc[0]
-
-        attributes = self.parse_name(row["name"])
-
-        return Skin(
-            id=row["file_name"],
-            name=row["name"],
-
-            weapon=attributes["weapon"],
-            finish=attributes["finish"],
-            condition=attributes["condition"],
-
-            stattrak=attributes["stattrak"],
-            souvenir=attributes["souvenir"],
-
-            history_file=str(
-                Path(self.items_directory) / row["file_name"]
-            )
-        )
     @staticmethod
     def parse_name(name: str):
         """
@@ -164,15 +176,8 @@ class SkinRepository:
             .replace("Souvenir ", "")
         )
 
-        wear_conditions = {
-            "Factory New",
-            "Minimal Wear",
-            "Field-Tested",
-            "Well-Worn",
-            "Battle-Scarred",
-        }
-
         if " | " not in cleaned:
+            # Vanilla knife/glove/agent/etc.
             return {
                 "weapon": cleaned,
                 "finish": None,
@@ -183,20 +188,13 @@ class SkinRepository:
 
         weapon, remainder = cleaned.split(" | ", 1)
 
-        # Only interpret parentheses as wear conditions
-        # when they contain an actual CS2 wear condition.
-        condition = "Vanilla"
-        finish = remainder
-
-        if remainder.endswith(")"):
-            match = re.search(r"\(([^()]*)\)$", remainder)
-
-            if match:
-                possible_condition = match.group(1)
-
-                if possible_condition in wear_conditions:
-                    condition = possible_condition
-                    finish = remainder[:match.start()].rstrip()
+        if " (" not in remainder:
+            # Has a finish but no wear condition
+            finish = remainder
+            condition = "Vanilla"
+        else:
+            finish, condition = remainder.rsplit(" (", 1)
+            condition = condition.rstrip(")")
 
         return {
             "weapon": weapon,
@@ -207,44 +205,33 @@ class SkinRepository:
         }
 
     def get_variants(self, base_name: str):
+        names = self.index["name"]
+
+        cleaned = (
+            names
+            .str.replace("StatTrak™ ", "", regex=False)
+            .str.replace("Souvenir ", "", regex=False)
+            .str.rsplit(" (", n=1).str[0]
+        )
+
+        matching_rows = self.index[cleaned == base_name]
 
         variants = []
 
-        wear_conditions = {
-            "Factory New",
-            "Minimal Wear",
-            "Field-Tested",
-            "Well-Worn",
-            "Battle-Scarred",
-        }
+        for _, row in matching_rows.iterrows():
+            attributes = self.parse_name(row["name"])
 
-        for _, row in self.index.iterrows():
-
-            name = row["name"]
-
-            attributes = self.parse_name(name)
-
-            cleaned = (
-                name
-                .replace("StatTrak™ ", "")
-                .replace("Souvenir ", "")
+            variants.append(
+                {
+                    "name": row["name"],
+                    "stattrak": attributes["stattrak"],
+                    "souvenir": attributes["souvenir"],
+                    "condition": attributes["condition"],
+                }
             )
 
-            # Remove wear condition only.
-            if attributes["condition"] in wear_conditions:
-                skin_base = cleaned.rsplit(" (", 1)[0]
-            else:
-                skin_base = cleaned
-
-            if skin_base == base_name:
-
-                variants.append(
-                    {
-                        "name": name,
-                        "stattrak": attributes["stattrak"],
-                        "souvenir": attributes["souvenir"],
-                        "condition": attributes["condition"],
-                    }
-                )
-
         return variants
+
+    def load_history(self, filepath):
+        from backend.collectors.csv_collector import CSVCollector
+        return CSVCollector.load_history(str(filepath))

@@ -6,4 +6,4 @@ class PricePoint:
     timestamp: datetime
     price: float
     volume: int | None = None
-    source: str = "unknown"
+    source: str = "kagglehub"
