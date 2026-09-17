@@ -1,7 +1,6 @@
 import pandas as pd
 from pathlib import Path
 import re
-from urllib.parse import unquote
 
 from backend.models.skin import Skin
 import streamlit as st
@@ -76,7 +75,7 @@ class SkinRepository:
         # New Kaggle dataset:
         # "URL encoded name","decoded name"
         self.index["name"] = self.index["decoded name"]
-        self.index["file_name"] = self.index["URL encoded name"].apply(unquote) + ".csv"
+        self.index["file_name"] = self.index["URL encoded name"] + ".csv"
         self.index["base_name"] = (
         self.index["name"]
         .str.replace(
