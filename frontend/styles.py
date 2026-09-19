@@ -81,13 +81,15 @@ def get_colors():
 
 def render_theme_toggle():
     """
-    Renders the Dark / Light mode switch in the sidebar.
+    Renders the Light mode switch in the sidebar.
     """
 
     if "quantstrike_theme" not in st.session_state:
         st.session_state.quantstrike_theme = "dark"
 
-    is_light = st.session_state.quantstrike_theme == "light"
+    is_light = (
+        st.session_state.quantstrike_theme == "light"
+    )
 
     light_mode = st.sidebar.toggle(
         "Light mode",
@@ -117,14 +119,46 @@ def load_css():
         f"""
         <style>
 
-            /* Hide Streamlit's built-in theme/settings controls */
+        /* ====================================================
+           STREAMLIT CHROME
+           ==================================================== */
+
+        /*
+         * IMPORTANT:
+         * Do NOT hide stToolbar.
+         *
+         * Streamlit uses its header/toolbar area for sidebar
+         * controls. Hiding it can make the sidebar impossible
+         * to reopen after collapsing it.
+         */
+
         [data-testid="stToolbar"] {{
-            display: none !important;
+            display: flex !important;
         }}
+
+        /*
+         * Hide only the settings button.
+         */
 
         button[aria-label="Settings"] {{
             display: none !important;
         }}
+
+        /*
+         * Keep sidebar controls available.
+         */
+
+        [data-testid="stSidebarCollapseButton"] {{
+            display: flex !important;
+            visibility: visible !important;
+        }}
+
+        [data-testid="stSidebarCollapsedControl"] {{
+            display: flex !important;
+            visibility: visible !important;
+        }}
+
+
         /* ====================================================
            QUANTSTRIKE — GLOBAL VARIABLES
            ==================================================== */
@@ -204,6 +238,7 @@ def load_css():
             background-color: var(--qs-card) !important;
         }}
 
+
         /* Sidebar text */
 
         section[data-testid="stSidebar"] p,
@@ -211,6 +246,7 @@ def load_css():
         section[data-testid="stSidebar"] label {{
             color: var(--qs-text) !important;
         }}
+
 
         /* Sidebar headings */
 
@@ -221,12 +257,14 @@ def load_css():
             font-family: var(--qs-font-mono) !important;
         }}
 
+
         /* Sidebar navigation links */
 
         section[data-testid="stSidebar"] a {{
             color: var(--qs-text-muted) !important;
             font-family: var(--qs-font-mono) !important;
             border-radius: 2px;
+
             transition:
                 background-color 0.15s ease,
                 color 0.15s ease;
@@ -236,6 +274,7 @@ def load_css():
             background-color: var(--qs-header) !important;
             color: var(--qs-accent) !important;
         }}
+
 
         /* Active sidebar navigation item */
 
@@ -249,6 +288,7 @@ def load_css():
         /* ====================================================
            GENERAL TEXT
            ==================================================== */
+
         .stMarkdown,
         [data-testid="stMarkdownContainer"] {{
             color: var(--qs-text) !important;
@@ -263,6 +303,8 @@ def load_css():
         .stCaption {{
             color: var(--qs-text-muted) !important;
         }}
+
+
         /* ====================================================
            HEADINGS
            ==================================================== */
@@ -366,7 +408,8 @@ def load_css():
         }}
 
         .stButton > button:focus {{
-            box-shadow: 0 0 0 1px var(--qs-accent) !important;
+            box-shadow:
+                0 0 0 1px var(--qs-accent) !important;
         }}
 
 
@@ -374,16 +417,19 @@ def load_css():
            SELECTBOX
            ==================================================== */
 
-        [data-testid="stSelectbox"] [data-baseweb="select"] > div {{
+        [data-testid="stSelectbox"]
+        [data-baseweb="select"] > div {{
             background-color: var(--qs-card) !important;
             color: var(--qs-text) !important;
             border-color: var(--qs-border) !important;
             border-radius: 2px !important;
         }}
 
-        [data-testid="stSelectbox"] [data-baseweb="select"]:focus-within > div {{
+        [data-testid="stSelectbox"]
+        [data-baseweb="select"]:focus-within > div {{
             border-color: var(--qs-accent) !important;
-            box-shadow: 0 0 0 1px var(--qs-accent) !important;
+            box-shadow:
+                0 0 0 1px var(--qs-accent) !important;
         }}
 
         [data-testid="stSelectbox"] input {{
@@ -396,15 +442,18 @@ def load_css():
            MULTISELECT
            ==================================================== */
 
-        [data-testid="stMultiSelect"] [data-baseweb="select"] > div {{
+        [data-testid="stMultiSelect"]
+        [data-baseweb="select"] > div {{
             background-color: var(--qs-card) !important;
             border-color: var(--qs-border) !important;
             border-radius: 2px !important;
         }}
 
-        [data-testid="stMultiSelect"] [data-baseweb="select"]:focus-within > div {{
+        [data-testid="stMultiSelect"]
+        [data-baseweb="select"]:focus-within > div {{
             border-color: var(--qs-accent) !important;
-            box-shadow: 0 0 0 1px var(--qs-accent) !important;
+            box-shadow:
+                0 0 0 1px var(--qs-accent) !important;
         }}
 
         [data-baseweb="tag"] {{
@@ -461,7 +510,8 @@ def load_css():
         .stNumberInput input:focus,
         .stTextArea textarea:focus {{
             border-color: var(--qs-accent) !important;
-            box-shadow: 0 0 0 1px var(--qs-accent) !important;
+            box-shadow:
+                0 0 0 1px var(--qs-accent) !important;
         }}
 
 

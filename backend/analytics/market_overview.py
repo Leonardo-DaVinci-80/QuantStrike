@@ -4,7 +4,6 @@ from time import perf_counter
 
 import pandas as pd
 
-from backend.collectors.csv_collector import CSVCollector
 from backend.models.price_point import PricePoint
 from backend.repositories.skin_repository import SkinRepository
 
@@ -13,7 +12,9 @@ class MarketOverviewAnalyzer:
     """
     Market-wide analytics for QuantStrike.
 
-    V3 features:
+    V4 architecture:
+    - Uses the consolidated historical Parquet dataset
+    - No dependency on raw CSV files
     - Daily price matrix
     - Observation matrix
     - Asset-relative rolling/expanding z-score filtering
@@ -31,35 +32,75 @@ class MarketOverviewAnalyzer:
     - Outlier detection occurs BEFORE QSI return clipping.
     """
 
-    CACHE_VERSION = "qsi_v3_1_robust"
+    CACHE_VERSION = "qsi_v4_parquet"
 
     def __init__(
         self,
         repository: SkinRepository,
+        historical_file: str,
         min_observations: int = 30,
         z_threshold: float = 5.0,
         rolling_window: int = 30,
         min_z_observations: int = 10,
         use_disk_cache: bool = True,
+        cache_version: str | None = None,
     ):
         self.repository = repository
-        self.min_observations = min_observations
+        self.historical_file = Path(historical_file)
+
+        if not self.historical_file.exists():
+            raise FileNotFoundError(
+                f"Historical data file not found: "
+                f"{self.historical_file}"
+            )
+
+        self.min_observations = int(
+            min_observations
+        )
 
         # V3 outlier configuration
-        self.z_threshold = abs(float(z_threshold))
-        self.rolling_window = int(rolling_window)
-        self.min_z_observations = int(min_z_observations)
+        self.z_threshold = abs(
+            float(z_threshold)
+        )
+
+        self.rolling_window = int(
+            rolling_window
+        )
+
+        self.min_z_observations = int(
+            min_z_observations
+        )
 
         self.use_disk_cache = use_disk_cache
 
-        self._histories: Dict[str, List[PricePoint]] | None = None
+        if cache_version:
+            self.CACHE_VERSION = str(
+                cache_version
+            )
 
-        self._daily_prices: pd.DataFrame | None = None
-        self._observations: pd.DataFrame | None = None
-        self._raw_returns: pd.DataFrame | None = None
-        self._daily_returns: pd.DataFrame | None = None
+        self._histories: (
+            Dict[str, List[PricePoint]] | None
+        ) = None
 
-        self._outlier_log: pd.DataFrame | None = None
+        self._daily_prices: (
+            pd.DataFrame | None
+        ) = None
+
+        self._observations: (
+            pd.DataFrame | None
+        ) = None
+
+        self._raw_returns: (
+            pd.DataFrame | None
+        ) = None
+
+        self._daily_returns: (
+            pd.DataFrame | None
+        ) = None
+
+        self._outlier_log: (
+            pd.DataFrame | None
+        ) = None
 
         self._load_time = None
         self._processing_time = None
@@ -71,28 +112,25 @@ class MarketOverviewAnalyzer:
     @property
     def cache_path(self) -> Path:
         """
-        Disk cache for processed market data.
+        Disk cache for processed market matrices.
 
-        The cache lives beside the demo item data.
+        The cache lives inside data/processed so the market
+        analytics layer does not depend on raw CSV directories.
         """
 
-        items_directory = Path(
-            self.repository.items_directory
-        )
-
         cache_directory = (
-            items_directory.parent /
-            "market_cache"
+            self.historical_file.parent
+            / "market_cache"
         )
 
         cache_directory.mkdir(
             parents=True,
-            exist_ok=True
+            exist_ok=True,
         )
 
         return (
-            cache_directory /
-            f"market_{self.CACHE_VERSION}.pkl"
+            cache_directory
+            / f"market_{self.CACHE_VERSION}.pkl"
         )
 
     def _load_disk_cache(self) -> bool:
@@ -119,21 +157,39 @@ class MarketOverviewAnalyzer:
                 "outlier_log",
             }
 
-            if not required_keys.issubset(cached.keys()):
+            if not required_keys.issubset(
+                cached.keys()
+            ):
                 return False
 
-            self._daily_prices = cached["prices"]
-            self._observations = cached["observations"]
-            self._raw_returns = cached["raw_returns"]
-            self._daily_returns = cached["daily_returns"]
-            self._outlier_log = cached["outlier_log"]
+            self._daily_prices = (
+                cached["prices"]
+            )
+
+            self._observations = (
+                cached["observations"]
+            )
+
+            self._raw_returns = (
+                cached["raw_returns"]
+            )
+
+            self._daily_returns = (
+                cached["daily_returns"]
+            )
+
+            self._outlier_log = (
+                cached["outlier_log"]
+            )
 
             return True
 
         except Exception as exc:
             print(
-                f"[MarketOverview] Cache load failed: {exc}"
+                f"[MarketOverview] "
+                f"Cache load failed: {exc}"
             )
+
             return False
 
     def _save_disk_cache(self):
@@ -158,31 +214,39 @@ class MarketOverviewAnalyzer:
         try:
             self.cache_path.parent.mkdir(
                 parents=True,
-                exist_ok=True
+                exist_ok=True,
             )
 
             pd.to_pickle(
                 payload,
-                self.cache_path
+                self.cache_path,
             )
 
             print(
-                f"[MarketOverview] Saved cache: "
-                f"{self.cache_path}"
+                f"[MarketOverview] "
+                f"Saved cache: {self.cache_path}"
             )
 
         except Exception as exc:
             print(
-                f"[MarketOverview] Cache save failed: {exc}"
+                f"[MarketOverview] "
+                f"Cache save failed: {exc}"
             )
 
     # =========================================================
     # DATA LOADING
     # =========================================================
 
-    def load_histories(self) -> Dict[str, List[PricePoint]]:
+    def load_histories(
+        self,
+    ) -> Dict[str, List[PricePoint]]:
         """
-        Load valid historical price data for all tracked assets.
+        Load historical price data from the consolidated
+        Parquet dataset.
+
+        The old implementation loaded thousands of raw CSV
+        files individually. The current implementation uses
+        historical_prices.parquet instead.
         """
 
         if self._histories is not None:
@@ -190,39 +254,179 @@ class MarketOverviewAnalyzer:
 
         start = perf_counter()
 
-        histories = {}
-
-        for _, row in self.repository.index.iterrows():
-
-            name = row["name"]
-
-            filepath = (
-                f"{self.repository.items_directory}/"
-                f"{row['file_name']}"
+        try:
+            df = pd.read_parquet(
+                self.historical_file,
+                engine="pyarrow",
+                columns=[
+                    "skin_id",
+                    "timestamp",
+                    "price",
+                    "volume",
+                ],
             )
 
-            try:
-                history = CSVCollector.load_history(filepath)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to load historical dataset: "
+                f"{self.historical_file}"
+            ) from exc
 
-            except (
-                FileNotFoundError,
-                ValueError,
-                OSError,
+        if df.empty:
+            raise ValueError(
+                "Historical dataset contains no observations."
+            )
+
+        # -----------------------------------------------------
+        # Clean timestamps and prices
+        # -----------------------------------------------------
+
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"],
+            errors="coerce",
+        )
+
+        df["price"] = pd.to_numeric(
+            df["price"],
+            errors="coerce",
+        )
+
+        df = (
+            df.dropna(
+                subset=[
+                    "skin_id",
+                    "timestamp",
+                    "price",
+                ]
+            )
+            .loc[
+                lambda x:
+                x["price"] > 0
+            ]
+        )
+
+        if df.empty:
+            raise ValueError(
+                "Historical dataset contains no "
+                "valid price observations."
+            )
+
+        # -----------------------------------------------------
+        # Map skin_id -> display name
+        # -----------------------------------------------------
+
+        metadata = self.repository.index[
+            [
+                "skin_id",
+                "name",
+            ]
+        ].copy()
+
+        metadata["skin_id"] = (
+            metadata["skin_id"]
+            .astype(str)
+        )
+
+        metadata["name"] = (
+            metadata["name"]
+            .astype(str)
+        )
+
+        df["skin_id"] = (
+            df["skin_id"]
+            .astype(str)
+        )
+
+        df = df.merge(
+            metadata,
+            on="skin_id",
+            how="inner",
+        )
+
+        if df.empty:
+            raise ValueError(
+                "No historical observations matched "
+                "the skin metadata."
+            )
+
+        # -----------------------------------------------------
+        # Remove duplicate observations
+        # -----------------------------------------------------
+
+        df = (
+            df.sort_values(
+                [
+                    "skin_id",
+                    "timestamp",
+                ]
+            )
+            .drop_duplicates(
+                subset=[
+                    "skin_id",
+                    "timestamp",
+                ],
+                keep="last",
+            )
+        )
+
+        # -----------------------------------------------------
+        # Build histories
+        # -----------------------------------------------------
+
+        histories = {}
+
+        for skin_id, group in df.groupby(
+            "skin_id",
+            sort=False,
+        ):
+            if len(group) < self.min_observations:
+                continue
+
+            name = str(
+                group["name"].iloc[0]
+            )
+
+            history = []
+
+            for row in group.itertuples(
+                index=False
             ):
-                continue
+                volume = None
 
-            if len(history) < self.min_observations:
-                continue
+                if (
+                    hasattr(row, "volume")
+                    and pd.notna(row.volume)
+                ):
+                    volume = int(
+                        row.volume
+                    )
+
+                history.append(
+                    PricePoint(
+                        timestamp=(
+                            row.timestamp
+                            .to_pydatetime()
+                        ),
+                        price=float(
+                            row.price
+                        ),
+                        volume=volume,
+                        source="steam_dataset",
+                    )
+                )
 
             histories[name] = history
 
         self._histories = histories
 
-        self._load_time = perf_counter() - start
+        self._load_time = (
+            perf_counter() - start
+        )
 
         print(
-            f"[MarketOverview] Loaded "
-            f"{len(histories):,} histories in "
+            f"[MarketOverview] "
+            f"Loaded {len(histories):,} histories "
+            f"from Parquet in "
             f"{self._load_time:.2f}s"
         )
 
@@ -237,7 +441,7 @@ class MarketOverviewAnalyzer:
         Build daily prices and observation matrix.
 
         If a processed disk cache exists, use it instead of
-        rebuilding all historical CSVs.
+        rebuilding the market dataset.
         """
 
         if (
@@ -257,7 +461,8 @@ class MarketOverviewAnalyzer:
 
             print(
                 "[MarketOverview] "
-                "Loaded processed market data from cache."
+                "Loaded processed market data "
+                "from cache."
             )
 
             return (
@@ -292,12 +497,12 @@ class MarketOverviewAnalyzer:
 
             df["timestamp"] = pd.to_datetime(
                 df["timestamp"],
-                errors="coerce"
+                errors="coerce",
             )
 
             df["price"] = pd.to_numeric(
                 df["price"],
-                errors="coerce"
+                errors="coerce",
             )
 
             # Basic sanity filtering.
@@ -366,7 +571,7 @@ class MarketOverviewAnalyzer:
         prices = (
             pd.concat(
                 price_series,
-                axis=1
+                axis=1,
             )
             .sort_index()
         )
@@ -374,7 +579,7 @@ class MarketOverviewAnalyzer:
         observations = (
             pd.concat(
                 observation_series,
-                axis=1
+                axis=1,
             )
             .reindex(
                 index=prices.index,
@@ -393,7 +598,8 @@ class MarketOverviewAnalyzer:
         )
 
         print(
-            "[MarketOverview] Built daily market data "
+            "[MarketOverview] "
+            "Built daily market data "
             f"in {self._processing_time:.2f}s"
         )
 
@@ -403,7 +609,10 @@ class MarketOverviewAnalyzer:
     # DAILY PRICE MATRIX
     # =========================================================
 
-    def build_daily_price_matrix(self) -> pd.DataFrame:
+    def build_daily_price_matrix(
+        self,
+    ) -> pd.DataFrame:
+
         prices, _ = (
             self._build_daily_market_data()
         )
@@ -414,7 +623,10 @@ class MarketOverviewAnalyzer:
     # OBSERVATION MATRIX
     # =========================================================
 
-    def build_observation_matrix(self) -> pd.DataFrame:
+    def build_observation_matrix(
+        self,
+    ) -> pd.DataFrame:
+
         _, observations = (
             self._build_daily_market_data()
         )
@@ -425,7 +637,9 @@ class MarketOverviewAnalyzer:
     # RAW RETURNS
     # =========================================================
 
-    def _build_raw_returns(self) -> pd.DataFrame:
+    def _build_raw_returns(
+        self,
+    ) -> pd.DataFrame:
         """
         Build returns BEFORE outlier filtering.
 
@@ -437,21 +651,29 @@ class MarketOverviewAnalyzer:
         if self._raw_returns is not None:
             return self._raw_returns
 
-        prices = self.build_daily_price_matrix()
-        observations = self.build_observation_matrix()
+        prices = (
+            self.build_daily_price_matrix()
+        )
+
+        observations = (
+            self.build_observation_matrix()
+        )
 
         # Carry latest known price forward.
         filled_prices = prices.ffill()
 
         # Return from previous known observation.
-        returns = filled_prices.pct_change()
+        returns = (
+            filled_prices.pct_change()
+        )
 
         # Only genuine new observations contribute.
         returns = returns.where(
             observations
         )
 
-        # Do not calculate returns before the first price.
+        # Do not calculate returns before the
+        # first price.
         returns = returns.where(
             filled_prices.notna()
         )
@@ -474,18 +696,16 @@ class MarketOverviewAnalyzer:
         For every asset:
 
         1. Calculate a baseline using previous observations.
-        2. Prefer a 30-observation rolling window.
-        3. Fall back to expanding statistics when insufficient
-           rolling observations exist.
+        2. Prefer a rolling window.
+        3. Fall back to expanding statistics when necessary.
         4. Calculate z-score.
         5. Reject observations where:
                z < -threshold
                OR
                z > +threshold
 
-        The current observation is excluded from the statistical
-        baseline using shift(1), preventing the outlier itself
-        from diluting its own z-score.
+        The current observation is excluded from the
+        statistical baseline using shift(1).
         """
 
         cleaned = returns.copy()
@@ -562,7 +782,7 @@ class MarketOverviewAnalyzer:
 
             z_scores = pd.Series(
                 float("nan"),
-                index=series.index
+                index=series.index,
             )
 
             z_scores.loc[valid_std] = (
@@ -570,8 +790,7 @@ class MarketOverviewAnalyzer:
                     series.loc[valid_std]
                     - mean.loc[valid_std]
                 )
-                /
-                std.loc[valid_std]
+                / std.loc[valid_std]
             )
 
             # -------------------------------------------------
@@ -579,11 +798,13 @@ class MarketOverviewAnalyzer:
             # -------------------------------------------------
 
             negative_outlier = (
-                z_scores < -self.z_threshold
+                z_scores
+                < -self.z_threshold
             )
 
             positive_outlier = (
-                z_scores > self.z_threshold
+                z_scores
+                > self.z_threshold
             )
 
             outliers = (
@@ -591,7 +812,9 @@ class MarketOverviewAnalyzer:
                 | positive_outlier
             )
 
-            outliers = outliers.fillna(False)
+            outliers = (
+                outliers.fillna(False)
+            )
 
             # -------------------------------------------------
             # Record rejected observations
@@ -601,13 +824,13 @@ class MarketOverviewAnalyzer:
                 outliers
             ]:
 
-                return_value = series.loc[
-                    timestamp
-                ]
+                return_value = (
+                    series.loc[timestamp]
+                )
 
-                z_value = z_scores.loc[
-                    timestamp
-                ]
+                z_value = (
+                    z_scores.loc[timestamp]
+                )
 
                 rejection_rows.append(
                     {
@@ -633,7 +856,7 @@ class MarketOverviewAnalyzer:
 
             cleaned.loc[
                 outliers,
-                name
+                name,
             ] = pd.NA
 
         # -----------------------------------------------------
@@ -642,21 +865,25 @@ class MarketOverviewAnalyzer:
 
         if rejection_rows:
 
-            self._outlier_log = pd.DataFrame(
-                rejection_rows
+            self._outlier_log = (
+                pd.DataFrame(
+                    rejection_rows
+                )
             )
 
         else:
 
-            self._outlier_log = pd.DataFrame(
-                columns=[
-                    "item",
-                    "timestamp",
-                    "return",
-                    "z_score",
-                    "direction",
-                    "reason",
-                ]
+            self._outlier_log = (
+                pd.DataFrame(
+                    columns=[
+                        "item",
+                        "timestamp",
+                        "return",
+                        "z_score",
+                        "direction",
+                        "reason",
+                    ]
+                )
             )
 
         return cleaned
@@ -665,15 +892,14 @@ class MarketOverviewAnalyzer:
     # DAILY RETURNS
     # =========================================================
 
-    def build_daily_returns(self) -> pd.DataFrame:
+    def build_daily_returns(
+        self,
+    ) -> pd.DataFrame:
         """
         Return cleaned daily asset returns.
 
         V3 cleaning happens BEFORE the ±50% market protection
         cap.
-
-        The ±50% cap remains as a secondary safeguard against
-        extreme but statistically undetected observations.
         """
 
         if self._daily_returns is not None:
@@ -687,8 +913,10 @@ class MarketOverviewAnalyzer:
         # V3 adaptive outlier filtering
         # -----------------------------------------------------
 
-        cleaned = self._filter_outliers(
-            raw_returns
+        cleaned = (
+            self._filter_outliers(
+                raw_returns
+            )
         )
 
         # -----------------------------------------------------
@@ -697,12 +925,12 @@ class MarketOverviewAnalyzer:
 
         cleaned = cleaned.clip(
             lower=-0.50,
-            upper=0.50
+            upper=0.50,
         )
 
         self._daily_returns = cleaned
 
-        # Save processed data after the expensive work.
+        # Save processed data after expensive work.
         self._save_disk_cache()
 
         return cleaned
@@ -716,7 +944,6 @@ class MarketOverviewAnalyzer:
         Return summary statistics for rejected observations.
         """
 
-        # Ensure filtering has happened.
         self.build_daily_returns()
 
         if self._outlier_log is None:
@@ -738,10 +965,16 @@ class MarketOverviewAnalyzer:
         return {
             "rejected_count": len(log),
             "negative_count": int(
-                (log["direction"] == "negative").sum()
+                (
+                    log["direction"]
+                    == "negative"
+                ).sum()
             ),
             "positive_count": int(
-                (log["direction"] == "positive").sum()
+                (
+                    log["direction"]
+                    == "positive"
+                ).sum()
             ),
         }
 
@@ -778,7 +1011,7 @@ class MarketOverviewAnalyzer:
             )
             .sort_values(
                 "abs_z",
-                ascending=False
+                ascending=False,
             )
             .drop(
                 columns=["abs_z"]
@@ -804,7 +1037,9 @@ class MarketOverviewAnalyzer:
         - Days with no observations carry the previous QSI level
         """
 
-        returns = self.build_daily_returns()
+        returns = (
+            self.build_daily_returns()
+        )
 
         if returns.empty:
             raise ValueError(
@@ -815,28 +1050,35 @@ class MarketOverviewAnalyzer:
             returns
             .mean(
                 axis=1,
-                skipna=True
+                skipna=True,
             )
         )
 
-        # Days with no observations have no new information.
-        # Their market return is 0 ONLY for index continuity;
-        # this does not mean stale assets contributed 0%.
+        # Days with no observations have no new
+        # information. Fill with zero only for
+        # index continuity.
         market_returns = (
             market_returns
             .fillna(0.0)
         )
 
         qsi = (
-            1000 *
-            (1 + market_returns)
+            1000
+            * (1 + market_returns)
             .cumprod()
         )
 
-        qsi = qsi.replace(
-            [float("inf"), float("-inf")],
-            pd.NA
-        ).dropna()
+        qsi = (
+            qsi
+            .replace(
+                [
+                    float("inf"),
+                    float("-inf"),
+                ],
+                pd.NA,
+            )
+            .dropna()
+        )
 
         qsi.name = "QSI"
 
@@ -846,13 +1088,17 @@ class MarketOverviewAnalyzer:
     # MARKET SNAPSHOT
     # =========================================================
 
-    def latest_market_snapshot(self) -> dict:
+    def latest_market_snapshot(
+        self,
+    ) -> dict:
         """
         Latest market statistics based only on assets with
         genuine observations.
         """
 
-        returns = self.build_daily_returns()
+        returns = (
+            self.build_daily_returns()
+        )
 
         if returns.empty:
             raise ValueError(
@@ -860,8 +1106,7 @@ class MarketOverviewAnalyzer:
             )
 
         valid_returns = (
-            returns
-            .dropna(how="all")
+            returns.dropna(how="all")
         )
 
         if valid_returns.empty:
@@ -877,7 +1122,8 @@ class MarketOverviewAnalyzer:
 
         if latest.empty:
             raise ValueError(
-                "No valid returns in latest market session."
+                "No valid returns in latest "
+                "market session."
             )
 
         tracked_assets = len(
@@ -917,9 +1163,13 @@ class MarketOverviewAnalyzer:
     # MARKET BREADTH
     # =========================================================
 
-    def market_breadth(self) -> pd.DataFrame:
+    def market_breadth(
+        self,
+    ) -> pd.DataFrame:
 
-        returns = self.build_daily_returns()
+        returns = (
+            self.build_daily_returns()
+        )
 
         advancing = (
             returns > 0
@@ -951,7 +1201,10 @@ class MarketOverviewAnalyzer:
     # TOP MOVERS
     # =========================================================
 
-    def top_movers(self, n: int = 10):
+    def top_movers(
+        self,
+        n: int = 10,
+    ):
 
         prices = (
             self.build_daily_price_matrix()
@@ -982,11 +1235,11 @@ class MarketOverviewAnalyzer:
                     "category",
                 ]
             )
+
             return empty, empty
 
         latest_returns = (
-            valid_returns
-            .iloc[-1]
+            valid_returns.iloc[-1]
         )
 
         movers = pd.DataFrame(
@@ -1005,7 +1258,7 @@ class MarketOverviewAnalyzer:
             movers
             .sort_values(
                 "return",
-                ascending=False
+                ascending=False,
             )
             .head(n)
         )
@@ -1014,7 +1267,7 @@ class MarketOverviewAnalyzer:
             movers
             .sort_values(
                 "return",
-                ascending=True
+                ascending=True,
             )
             .head(n)
         )
@@ -1025,7 +1278,9 @@ class MarketOverviewAnalyzer:
     # MARKET COVERAGE
     # =========================================================
 
-    def market_coverage(self) -> pd.Series:
+    def market_coverage(
+        self,
+    ) -> pd.Series:
 
         observations = (
             self.build_observation_matrix()
@@ -1041,9 +1296,13 @@ class MarketOverviewAnalyzer:
     # RETURN DIAGNOSTICS
     # =========================================================
 
-    def return_diagnostics(self) -> dict:
+    def return_diagnostics(
+        self,
+    ) -> dict:
 
-        returns = self.build_daily_returns()
+        returns = (
+            self.build_daily_returns()
+        )
 
         values = (
             returns
@@ -1088,9 +1347,14 @@ class MarketOverviewAnalyzer:
     # CATEGORY CLASSIFICATION
     # =========================================================
 
-    def classify_asset(self, name: str) -> str:
+    def classify_asset(
+        self,
+        name: str,
+    ) -> str:
 
-        lower = name.lower().strip()
+        lower = (
+            name.lower().strip()
+        )
 
         # -----------------------------------------------------
         # Special item types
@@ -1265,21 +1529,23 @@ class MarketOverviewAnalyzer:
     # CATEGORY RETURNS
     # =========================================================
 
-    def category_returns(self) -> dict:
+    def category_returns(
+        self,
+    ) -> dict:
 
-        returns = self.build_daily_returns()
+        returns = (
+            self.build_daily_returns()
+        )
 
         valid_returns = (
-            returns
-            .dropna(how="all")
+            returns.dropna(how="all")
         )
 
         if valid_returns.empty:
             return {}
 
         latest = (
-            valid_returns
-            .iloc[-1]
+            valid_returns.iloc[-1]
         )
 
         categories = {}
@@ -1292,12 +1558,14 @@ class MarketOverviewAnalyzer:
 
             categories.setdefault(
                 category,
-                []
+                [],
             ).append(name)
 
         result = {}
 
-        for category, assets in categories.items():
+        for category, assets in (
+            categories.items()
+        ):
 
             values = (
                 latest[assets]
@@ -1322,7 +1590,9 @@ class MarketOverviewAnalyzer:
     # CATEGORY INDICES
     # =========================================================
 
-    def category_indices(self) -> dict:
+    def category_indices(
+        self,
+    ) -> dict:
         """
         Calculate category-level indices.
 
@@ -1332,7 +1602,9 @@ class MarketOverviewAnalyzer:
         Days without observations carry the previous index level.
         """
 
-        returns = self.build_daily_returns()
+        returns = (
+            self.build_daily_returns()
+        )
 
         category_assets = {}
 
@@ -1344,18 +1616,20 @@ class MarketOverviewAnalyzer:
 
             category_assets.setdefault(
                 category,
-                []
+                [],
             ).append(name)
 
         indices = {}
 
-        for category, assets in category_assets.items():
+        for category, assets in (
+            category_assets.items()
+        ):
 
             category_returns = (
                 returns[assets]
                 .mean(
                     axis=1,
-                    skipna=True
+                    skipna=True,
                 )
                 .fillna(0.0)
             )
@@ -1364,8 +1638,8 @@ class MarketOverviewAnalyzer:
                 continue
 
             indices[category] = (
-                1000 *
-                (1 + category_returns)
+                1000
+                * (1 + category_returns)
                 .cumprod()
             )
 

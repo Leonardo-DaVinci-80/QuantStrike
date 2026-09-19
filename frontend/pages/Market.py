@@ -1,58 +1,97 @@
 import sys
+import os
 from pathlib import Path
-from styles import load_css, render_theme_toggle
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-
 ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(ROOT))
 
+from styles import load_css, render_theme_toggle, style_plotly
 from backend.repositories.skin_repository import SkinRepository
 from backend.analytics.market_overview import MarketOverviewAnalyzer
-render_theme_toggle()
-load_css()
+
 
 # =========================================================
 # CONFIG
 # =========================================================
+
 st.set_page_config(
     page_title="QuantStrike — Market",
-    layout="wide"
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-INDEX_FILE = str(
-    ROOT / "data" / "raw" / "name_conversion_table.csv"
-)
+render_theme_toggle()
+load_css()
 
-ITEMS_DIRECTORY = str(
-    ROOT / "data" / "raw" / "items"
-)
+
 # =========================================================
-# LOAD DATA
+# PATHS
 # =========================================================
 
-@st.cache_resource
+DEFAULT_METADATA = str(
+    ROOT / "data" / "processed" / "skin_metadata.parquet"
+)
+
+METADATA_FILE = os.environ.get(
+    "QUANTSTRIKE_METADATA_FILE",
+    DEFAULT_METADATA,
+)
+
+DEFAULT_HISTORICAL = str(
+    ROOT / "data" / "processed" / "historical_prices.parquet"
+)
+
+HISTORICAL_FILE = os.environ.get(
+    "QUANTSTRIKE_HISTORICAL_FILE",
+    DEFAULT_HISTORICAL,
+)
+
+
+# =========================================================
+# LOAD REPOSITORY
+# =========================================================
+
+@st.cache_resource(
+    show_spinner="Loading market repository..."
+)
 def load_repository():
 
     return SkinRepository(
-        index_file=INDEX_FILE,
-        items_directory=ITEMS_DIRECTORY
+        metadata_file=METADATA_FILE
     )
 
-@st.cache_resource
-def load_analyzer(cache_version="qsi_v3_clean_1"):
-    return MarketOverviewAnalyzer(
-        repository=load_repository()
-    )
 
 repo = load_repository()
-analyzer = load_analyzer("qsi_v4")
+
+
+# =========================================================
+# LOAD ANALYZER
+# =========================================================
+
+@st.cache_resource(
+    show_spinner="Initializing market analytics..."
+)
+def load_analyzer():
+
+    return MarketOverviewAnalyzer(
+        repository=load_repository(),
+        historical_file=HISTORICAL_FILE,
+        cache_version="qsi_v4_parquet",
+    )
+
+
+analyzer = load_analyzer()
+
 
 # =========================================================
 # HEADER
 # =========================================================
+
 st.title("📊 Market Overview")
 
 st.caption(
@@ -61,28 +100,74 @@ st.caption(
 )
 
 st.caption(
-    "Historical market data · QSI currently based on "
-    "the QuantStrike historical dataset."
+    "QuantStrike Index, market breadth, category performance "
+    "and historical market structure."
 )
-# =========================================================
-# LOAD ANALYTICS
-# =========================================================
 
-with st.spinner("Loading market analytics..."):
-    qsi = analyzer.calculate_qsi()
-    snapshot = analyzer.latest_market_snapshot()
-    gainers, losers = analyzer.top_movers(10)
-    breadth = analyzer.market_breadth()
 
 # =========================================================
-# QUANTSTRIKE INDEX
+# LOAD MARKET ANALYTICS
 # =========================================================
 
-st.divider()
+@st.cache_data(
+    ttl=900,
+    show_spinner="Calculating market analytics..."
+)
+def load_market_analytics(_analyzer):
 
-st.subheader("QuantStrike Index")
+    qsi = _analyzer.calculate_qsi()
+
+    snapshot = _analyzer.latest_market_snapshot()
+
+    gainers, losers = _analyzer.top_movers(10)
+
+    breadth = _analyzer.market_breadth()
+
+    category_indices = _analyzer.category_indices()
+
+    category_returns = _analyzer.category_returns()
+
+    return (
+        qsi,
+        snapshot,
+        gainers,
+        losers,
+        breadth,
+        category_indices,
+        category_returns,
+    )
+
+
+(
+    qsi,
+    snapshot,
+    gainers,
+    losers,
+    breadth,
+    category_indices,
+    category_returns,
+) = load_market_analytics(analyzer)
+
+
+# =========================================================
+# BASIC DATA VALIDATION
+# =========================================================
+
+if qsi is None or len(qsi) == 0:
+
+    st.error(
+        "QuantStrike Index data is currently unavailable."
+    )
+
+    st.stop()
+
 
 latest_qsi = float(qsi.iloc[-1])
+
+
+# =========================================================
+# DERIVED MARKET SIGNALS
+# =========================================================
 
 if len(qsi) >= 2:
 
@@ -100,165 +185,376 @@ else:
     qsi_change = None
 
 
-qsi_col, change_col = st.columns([3, 1])
+# 30-day QSI change
+
+if len(qsi) >= 31:
+
+    qsi_30d_change = (
+        latest_qsi / float(qsi.iloc[-31]) - 1
+    ) * 100
+
+else:
+
+    qsi_30d_change = None
+
+
+# 52-week QSI change
+
+if len(qsi) >= 365:
+
+    qsi_52w_change = (
+        latest_qsi / float(qsi.iloc[-365]) - 1
+    ) * 100
+
+else:
+
+    qsi_52w_change = None
+
+
+# =========================================================
+# MARKET REGIME
+# =========================================================
+
+advancing = int(snapshot.get("advancing", 0))
+declining = int(snapshot.get("declining", 0))
+
+if advancing + declining > 0:
+
+    breadth_ratio = (
+        advancing /
+        (advancing + declining)
+    )
+
+else:
+
+    breadth_ratio = None
+
+
+if breadth_ratio is None:
+
+    regime = "Insufficient data"
+
+elif breadth_ratio >= 0.60:
+
+    regime = "Broadly Advancing"
+
+elif breadth_ratio <= 0.40:
+
+    regime = "Broadly Declining"
+
+else:
+
+    regime = "Mixed Market"
+
+
+# =========================================================
+# QUANTSTRIKE INDEX
+# =========================================================
+
+st.divider()
+
+st.subheader("QuantStrike Index")
+
+qsi_col, change_col, month_col, year_col = st.columns(4)
+
 
 with qsi_col:
 
     st.metric(
         "QSI",
-        f"{latest_qsi:,.2f}"
+        f"{latest_qsi:,.2f}",
     )
+
 
 with change_col:
 
-    if qsi_change is not None:
-
-        st.metric(
-            "24H",
+    st.metric(
+        "24H",
+        (
             f"{qsi_change:+.2f}%"
-        )
+            if qsi_change is not None
+            else "—"
+        ),
+    )
 
-    else:
 
-        st.metric(
-            "24H",
-            "—"
-        )
+with month_col:
+
+    st.metric(
+        "30D",
+        (
+            f"{qsi_30d_change:+.2f}%"
+            if qsi_30d_change is not None
+            else "—"
+        ),
+    )
+
+
+with year_col:
+
+    st.metric(
+        "52W",
+        (
+            f"{qsi_52w_change:+.2f}%"
+            if qsi_52w_change is not None
+            else "—"
+        ),
+    )
 
 
 # =========================================================
 # QSI CHART
 # =========================================================
 
+qsi_chart = pd.DataFrame(
+    {
+        "QSI": qsi
+    }
+)
+
+
+if len(qsi_chart) >= 30:
+
+    qsi_chart["MA30"] = (
+        qsi_chart["QSI"]
+        .rolling(30)
+        .mean()
+    )
+
+
 fig = go.Figure()
+
 
 fig.add_trace(
     go.Scatter(
-        x=qsi.index,
-        y=qsi.values,
+        x=qsi_chart.index,
+        y=qsi_chart["QSI"],
         mode="lines",
-        name="QSI"
+        name="QSI",
+        line=dict(width=2),
     )
 )
 
+
+if "MA30" in qsi_chart.columns:
+
+    fig.add_trace(
+        go.Scatter(
+            x=qsi_chart.index,
+            y=qsi_chart["MA30"],
+            mode="lines",
+            name="30D MA",
+            line=dict(
+                width=1.5,
+                dash="dash",
+            ),
+        )
+    )
+
+
 fig.update_layout(
-    title="QuantStrike Index",
+    title="QuantStrike Market Index",
     xaxis_title="Date",
     yaxis_title="Index Value",
     hovermode="x unified",
-    height=400,
+    height=420,
     margin=dict(
         l=20,
         r=20,
-        t=40,
-        b=20
-    )
+        t=45,
+        b=20,
+    ),
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1,
+    ),
 )
+
+
+fig = style_plotly(fig)
+
 
 st.plotly_chart(
     fig,
-    use_container_width=True
+    use_container_width=True,
+    key="qsi_chart",
 )
 
+
 st.caption(
-    "QSI base value: 1,000. Individual asset returns are "
-    "capped at ±50%. Assets contribute only when new price "
+    "QSI base value: 1,000. Asset returns are capped at "
+    "±50% and assets contribute only when new price "
     "observations are available."
 )
+
 
 # =========================================================
 # MARKET SNAPSHOT
 # =========================================================
 
-col1, col2, col3, col4, col5 = st.columns(5)
+st.divider()
+
+st.subheader("Market Snapshot")
+
 st.caption(
-    "Market statistics are calculated from assets with "
-    "actual price observations in the latest available session."
+    "Statistics calculated from assets with actual price "
+    "observations in the latest available session."
 )
+
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+
 with col1:
+
     st.metric(
         "Market Return",
-        f"{snapshot['market_return'] * 100:+.2f}%"
+        f"{snapshot['market_return'] * 100:+.2f}%",
     )
+
 
 with col2:
+
     st.metric(
         "Advancing",
-        f"{snapshot['advancing']:,}"
+        f"{snapshot['advancing']:,}",
     )
+
 
 with col3:
+
     st.metric(
         "Declining",
-        f"{snapshot['declining']:,}"
+        f"{snapshot['declining']:,}",
     )
+
 
 with col4:
+
     st.metric(
         "Active Assets",
-        f"{snapshot['active_assets']:,}"
+        f"{snapshot['active_assets']:,}",
     )
 
+
 with col5:
+
     st.metric(
         "Coverage",
-        f"{snapshot['coverage'] * 100:.2f}%"
+        f"{snapshot['coverage'] * 100:.2f}%",
     )
+
+
+# =========================================================
+# MARKET REGIME
+# =========================================================
+
+st.subheader("Market Regime")
+
+regime_col, breadth_col, volatility_col = st.columns(3)
+
+
+with regime_col:
+
+    st.metric(
+        "Current Regime",
+        regime,
+    )
+
+
+with breadth_col:
+
+    st.metric(
+        "Advance Ratio",
+        (
+            f"{breadth_ratio * 100:.1f}%"
+            if breadth_ratio is not None
+            else "—"
+        ),
+    )
+
+
+with volatility_col:
+
+    st.metric(
+        "Market Volatility",
+        f"{snapshot['volatility'] * 100:.2f}%",
+    )
+
 
 # =========================================================
 # MARKET BREADTH
 # =========================================================
 
 st.divider()
+
 st.subheader("Market Breadth")
 
 st.caption(
-    f"Statistics based on {snapshot['active_assets']:,} assets "
-    f"with new price observations in the latest available session "
-    f"out of {snapshot['tracked_assets']:,} tracked assets."
+    f"{snapshot['active_assets']:,} active assets out of "
+    f"{snapshot['tracked_assets']:,} tracked assets."
 )
 
-latest_breadth = (
+
+breadth_clean = (
     breadth
     .dropna(how="all")
-    .iloc[-1]
+    .copy()
 )
 
-col1, col2, col3, col4, col5 = st.columns(5)
 
-with col1:
+if not breadth_clean.empty:
 
-    st.metric(
-        "Market Return",
-        f"{snapshot['market_return'] * 100:+.2f}%"
+    fig = go.Figure()
+
+
+    if "advancing" in breadth_clean.columns:
+
+        fig.add_trace(
+            go.Scatter(
+                x=breadth_clean.index,
+                y=breadth_clean["advancing"],
+                mode="lines",
+                name="Advancing",
+            )
+        )
+
+
+    if "declining" in breadth_clean.columns:
+
+        fig.add_trace(
+            go.Scatter(
+                x=breadth_clean.index,
+                y=breadth_clean["declining"],
+                mode="lines",
+                name="Declining",
+            )
+        )
+
+
+    fig.update_layout(
+        title="Advancing vs Declining Assets",
+        height=320,
+        hovermode="x unified",
+        margin=dict(
+            l=20,
+            r=20,
+            t=45,
+            b=20,
+        ),
     )
 
-with col2:
 
-    st.metric(
-        "Advancing",
-        f"{snapshot['advancing']:,}"
-    )
+    fig = style_plotly(fig)
 
-with col3:
 
-    st.metric(
-        "Declining",
-        f"{snapshot['declining']:,}"
-    )
-
-with col4:
-
-    st.metric(
-        "Active Assets",
-        f"{snapshot['active_assets']:,}"
-    )
-
-with col5:
-
-    st.metric(
-        "Volatility",
-        f"{snapshot['volatility'] * 100:.2f}%"
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key="breadth_chart",
     )
 
 
@@ -271,11 +567,11 @@ st.divider()
 st.subheader("Market Indices")
 
 st.caption(
-    "Category-level indices will track major segments "
-    "of the CS2 market."
+    "Category-level indices track major segments of the "
+    "CS2 market."
 )
 
-category_indices = analyzer.category_indices()
+
 display_categories = [
     "Rifles",
     "Pistols",
@@ -293,7 +589,9 @@ display_categories = [
     "Keys",
 ]
 
+
 cols = st.columns(5)
+
 
 for i, category in enumerate(display_categories):
 
@@ -301,46 +599,52 @@ for i, category in enumerate(display_categories):
 
         series = category_indices.get(category)
 
+
         if series is None or series.empty:
 
             st.metric(
                 category,
-                "—"
+                "—",
             )
 
-        else:
+            continue
 
-            latest = float(series.iloc[-1])
 
-            if len(series) >= 2:
+        latest = float(series.iloc[-1])
 
-                previous = float(series.iloc[-2])
 
-                if previous != 0:
+        if len(series) >= 2:
 
-                    change = (
-                        latest / previous - 1
-                    ) * 100
+            previous = float(series.iloc[-2])
 
-                else:
+            if previous != 0:
 
-                    change = None
+                change = (
+                    latest / previous - 1
+                ) * 100
 
             else:
 
                 change = None
 
-            st.metric(
-                category,
-                f"{latest:,.2f}",
-                (
-                    f"{change:+.2f}%"
-                    if change is not None
-                    else None
-                )
-            )
+        else:
+
+            change = None
+
+
+        st.metric(
+            category,
+            f"{latest:,.2f}",
+            (
+                f"{change:+.2f}%"
+                if change is not None
+                else None
+            ),
+        )
+
+
 # =========================================================
-# TOP GAINERS / LOSERS
+# TOP MOVERS
 # =========================================================
 
 st.divider()
@@ -348,11 +652,22 @@ st.divider()
 gainers_col, losers_col = st.columns(2)
 
 
-with gainers_col:
+def format_movers(df):
 
-    st.subheader("🚀 Top Gainers")
+    if df is None or df.empty:
 
-    display = gainers.reset_index()
+        return pd.DataFrame(
+            columns=[
+                "Skin",
+                "Price",
+                "24H",
+                "Category",
+            ]
+        )
+
+
+    display = df.reset_index().copy()
+
 
     display.columns = [
         "Skin",
@@ -361,44 +676,69 @@ with gainers_col:
         "Category",
     ]
 
-    display["Price"] = display["Price"].map(
-        lambda x: f"${x:,.2f}"
+
+    display["Price"] = pd.to_numeric(
+        display["Price"],
+        errors="coerce",
     )
+
+
+    display["24H"] = pd.to_numeric(
+        display["24H"],
+        errors="coerce",
+    )
+
+
+    display["Price"] = display["Price"].map(
+        lambda x: (
+            f"${x:,.2f}"
+            if pd.notna(x)
+            else "—"
+        )
+    )
+
 
     display["24H"] = display["24H"].map(
-        lambda x: f"{x * 100:+.2f}%"
+        lambda x: (
+            f"{x * 100:+.2f}%"
+            if pd.notna(x)
+            else "—"
+        )
     )
 
+
+    return display
+
+
+# ---------------------------------------------------------
+# GAINERS
+# ---------------------------------------------------------
+
+with gainers_col:
+
+    st.subheader("🚀 Top Gainers")
+
+    display_gainers = format_movers(gainers)
+
     st.dataframe(
-        display,
+        display_gainers,
         hide_index=True,
         use_container_width=True,
     )
 
 
+# ---------------------------------------------------------
+# LOSERS
+# ---------------------------------------------------------
+
 with losers_col:
 
     st.subheader("📉 Top Losers")
 
-    display = losers.reset_index()
-
-    display.columns = [
-        "Skin",
-        "Price",
-        "24H",
-        "Category"
-    ]
-
-    display["Price"] = display["Price"].map(
-        lambda x: f"${x:,.2f}"
-    )
-
-    display["24H"] = display["24H"].map(
-        lambda x: f"{x * 100:+.2f}%"
-    )
+    display_losers = format_movers(losers)
 
     st.dataframe(
-        display,
+        display_losers,
         hide_index=True,
         use_container_width=True,
     )
@@ -413,64 +753,45 @@ st.divider()
 st.subheader("Market Heatmap")
 
 st.caption(
-    "24H performance across major CS2 market categories. "
-    "Only assets with new price observations contribute."
+    "24H performance across major CS2 market categories."
 )
 
-category_returns = analyzer.category_returns()
-
-heatmap_categories = [
-    "Rifles",
-    "Pistols",
-    "SMGs",
-    "Heavy Weapons",
-    "Knives",
-    "Gloves",
-    "Cases",
-    "Stickers",
-    "Capsules",
-    "Agents",
-    "Graffiti",
-    "Patches",
-    "Music Kits",
-    "Keys",
-]
 
 heatmap_data = []
 
-for category in heatmap_categories:
+for category in display_categories:
 
     value = category_returns.get(category)
 
-    if value is None or pd.isna(value):
 
-        heatmap_data.append(
-            {
-                "Category": category,
-                "24H Return": None,
-            }
-        )
+    heatmap_data.append(
+        {
+            "Category": category,
+            "Value": (
+                value * 100
+                if value is not None
+                and pd.notna(value)
+                else None
+            ),
+        }
+    )
 
-    else:
-
-        heatmap_data.append(
-            {
-                "Category": category,
-                "24H Return": value * 100,
-            }
-        )
 
 heatmap = pd.DataFrame(heatmap_data)
 
-heatmap = pd.DataFrame(heatmap_data)
-
-heatmap["Value"] = heatmap["24H Return"]
 
 fig = go.Figure(
     data=go.Heatmap(
-        z=[heatmap["Value"].fillna(0).tolist()],
+        z=[
+            heatmap["Value"]
+            .fillna(0)
+            .tolist()
+        ],
+
         x=heatmap["Category"],
+
         y=["24H Return"],
+
         text=[
             [
                 "—"
@@ -479,18 +800,23 @@ fig = go.Figure(
                 for value in heatmap["Value"]
             ]
         ],
+
         texttemplate="%{text}",
+
         hovertemplate=(
             "<b>%{x}</b><br>"
             "24H Return: %{text}"
             "<extra></extra>"
         ),
+
         colorbar=dict(
-            title="Return"
+            title="Return",
         ),
+
         zmid=0,
     )
 )
+
 
 fig.update_layout(
     height=220,
@@ -498,110 +824,184 @@ fig.update_layout(
         l=20,
         r=20,
         t=20,
-        b=20
+        b=20,
     ),
 )
 
+
+fig = style_plotly(fig)
+
+
 st.plotly_chart(
     fig,
-    use_container_width=True
+    use_container_width=True,
+    key="market_heatmap",
 )
+
+
 # =========================================================
 # MARKET DATA SOURCES
 # =========================================================
 
 st.divider()
 
-st.subheader("Market Data Sources")
+st.subheader("Market Data")
 
 st.info(
     "QuantStrike currently uses the historical dataset "
     "for market analytics. Live Market.CSGO pricing and "
-    "sales history will be connected in a future update."
+    "sales history can be connected as an additional data "
+    "source in a future update."
 )
 
+
 # =========================================================
-# V3 DIAGNOSTICS
+# DIAGNOSTICS
 # =========================================================
 
 st.divider()
 
-st.subheader("🔬 QuantStrike V3 Diagnostics")
+with st.expander(
+    "🔬 QuantStrike Diagnostics",
+    expanded=False,
+):
 
-outlier_stats = analyzer.outlier_diagnostics()
-return_stats = analyzer.return_diagnostics()
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric(
-        "Rejected Outliers",
-        f"{outlier_stats['rejected_count']:,}"
+    st.caption(
+        "Technical diagnostics for validating the market "
+        "data cleaning and return calculations."
     )
 
-with col2:
-    st.metric(
-        "Negative Outliers",
-        f"{outlier_stats['negative_count']:,}"
+
+    @st.cache_data(
+        ttl=900,
+        show_spinner="Running diagnostics..."
     )
+    def load_diagnostics(_analyzer):
 
-with col3:
-    st.metric(
-        "Positive Outliers",
-        f"{outlier_stats['positive_count']:,}"
-    )
-
-st.write("Return distribution after V3 cleaning:")
-
-st.json(return_stats)
-
-rejected = analyzer.rejected_observations(25)
-
-if rejected.empty:
-
-    st.info(
-        "No observations were rejected by the V3 z-score filter."
-    )
-
-else:
-
-    st.write("Most extreme rejected observations:")
-
-    display_rejected = rejected.copy()
-
-    display_rejected["return"] = (
-        display_rejected["return"] * 100
-    ).map(
-        lambda x: f"{x:+.2f}%"
-    )
-
-    display_rejected["z_score"] = (
-        display_rejected["z_score"]
-        .map(
-            lambda x: f"{x:.2f}"
+        outlier_stats = (
+            _analyzer.outlier_diagnostics()
         )
+
+        return_stats = (
+            _analyzer.return_diagnostics()
+        )
+
+        rejected = (
+            _analyzer.rejected_observations(25)
+        )
+
+        return (
+            outlier_stats,
+            return_stats,
+            rejected,
+        )
+
+
+    (
+        outlier_stats,
+        return_stats,
+        rejected,
+    ) = load_diagnostics(analyzer)
+
+
+    col1, col2, col3 = st.columns(3)
+
+
+    with col1:
+
+        st.metric(
+            "Rejected Outliers",
+            f"{outlier_stats['rejected_count']:,}",
+        )
+
+
+    with col2:
+
+        st.metric(
+            "Negative Outliers",
+            f"{outlier_stats['negative_count']:,}",
+        )
+
+
+    with col3:
+
+        st.metric(
+            "Positive Outliers",
+            f"{outlier_stats['positive_count']:,}",
+        )
+
+
+    st.write(
+        "Return distribution after V3 cleaning:"
     )
 
-    st.dataframe(
-        display_rejected,
-        hide_index=True,
-        use_container_width=True,
+
+    st.json(return_stats)
+
+
+    if rejected.empty:
+
+        st.info(
+            "No observations were rejected by the "
+            "V3 z-score filter."
+        )
+
+    else:
+
+        st.write(
+            "Most extreme rejected observations:"
+        )
+
+
+        display_rejected = rejected.copy()
+
+
+        if "return" in display_rejected.columns:
+
+            display_rejected["return"] = (
+                display_rejected["return"] * 100
+            ).map(
+                lambda x: f"{x:+.2f}%"
+            )
+
+
+        if "z_score" in display_rejected.columns:
+
+            display_rejected["z_score"] = (
+                display_rejected["z_score"]
+                .map(
+                    lambda x: f"{x:.2f}"
+                )
+            )
+
+
+        st.dataframe(
+            display_rejected,
+            hide_index=True,
+            use_container_width=True,
+        )
+
+
+# =========================================================
+# PERFORMANCE INFORMATION
+# =========================================================
+
+with st.expander(
+    "⚙️ Performance Information",
+    expanded=False,
+):
+
+    st.write(
+        f"History loading: "
+        f"{analyzer._load_time:.2f}s"
+        if analyzer._load_time is not None
+        else "History loading: loaded from cache"
     )
 
-st.write(
-    "Performance:"
-)
 
-st.write(
-    f"History loading: "
-    f"{analyzer._load_time:.2f}s"
-    if analyzer._load_time is not None
-    else "History loading: loaded from cache"
-)
-
-st.write(
-    f"Market matrix processing: "
-    f"{analyzer._processing_time:.2f}s"
-    if analyzer._processing_time is not None
-    else "Market matrix processing: loaded from cache"
-)
+    st.write(
+        f"Market matrix processing: "
+        f"{analyzer._processing_time:.2f}s"
+        if analyzer._processing_time is not None
+        else "Market matrix processing: loaded from cache"
+    )
