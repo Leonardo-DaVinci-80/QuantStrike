@@ -92,8 +92,6 @@ def load_historical_store():
 
 
 repo = load_repository()
-historical_store = load_historical_store()
-
 
 # ============================================================
 # Page header
@@ -458,6 +456,7 @@ if skin:
     # Historical data
     # ========================================================
 
+    historical_store = load_historical_store()
     history = historical_store.load_history(
         skin.id
     )
