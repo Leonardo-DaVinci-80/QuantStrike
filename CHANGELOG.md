@@ -2,6 +2,141 @@
 
 All notable changes to QuantStrike will be documented in this file.
 
+## v1.4.0 - Historical Analytics & Quantitative Engine Update — 2026-09-20
+
+### Added
+
+#### Historical Market Dataset
+- Expanded the tracked dataset to approximately **22,495 CS2 assets**.
+- Expanded the historical price dataset to approximately **105 million observations**.
+- Added a full historical Parquet dataset containing:
+  - `skin_id`
+  - Timestamp
+  - Price
+  - Volume
+- Added a structured skin metadata index for resolving searchable assets to exact historical identifiers.
+- Preserved the raw historical dataset as an immutable source of truth.
+
+#### Historical Data Engine
+- Added DuckDB-based querying for large historical datasets.
+- Added targeted historical queries so individual assets can be analyzed without loading the full dataset into Pandas.
+- Added daily historical aggregation directly within DuckDB.
+- Added daily historical statistics:
+  - Low
+  - Median
+  - Average
+  - High
+  - Close
+  - Observation count
+  - Volume
+- Added exact-date historical observation queries.
+- Added optional daily historical cache generation for faster repeated analysis.
+
+#### Skin Detail Analytics
+- Reworked the Skin Detail page around exact historical asset resolution.
+- Added searchable base-skin selection.
+- Added Normal / StatTrak™ / Souvenir variant selection.
+- Added condition/wear selection for supported assets.
+- Added exact `skin_id` resolution before querying historical data.
+- Added interactive historical price charts.
+- Added historical range selection:
+  - 7D
+  - 30D
+  - 90D
+  - 1Y
+  - All Time
+- Added interactive historical price exploration by date.
+- Added exact historical observation inspection for selected dates.
+- Added historical statistics including:
+  - All-time high
+  - All-time low
+  - Historical median
+  - Historical average
+  - Price volatility
+  - Total volume
+  - Observation count
+- Added historical price distribution visualization.
+- Added price and volume analysis.
+- Added complete raw historical observation inspection.
+
+#### Anomaly Detection
+- Added statistical anomaly detection across historical skin prices.
+- Added detection of isolated price crashes followed by recoveries.
+- Added anomaly analysis using local price behavior and volume.
+- Added anomaly classifications:
+  - `normal`
+  - `isolated_single_sale_anomaly`
+  - `isolated_multi_sale_anomaly`
+  - `structurally_invalid`
+- Added anomaly overlays to historical price charts.
+- Added dedicated historical anomaly tables.
+- Added diagnostic analysis of anomalous observations across the dataset.
+- Anomalous observations are flagged rather than deleted so the original historical record remains preserved.
+
+#### Theme System
+- Added centralized QuantStrike theme management.
+- Added full dark and light mode support.
+- Added shared color tokens for:
+  - Backgrounds
+  - Cards
+  - Borders
+  - Text
+  - Accents
+  - Positive values
+  - Negative values
+  - Plot grids
+- Added shared Plotly styling so charts automatically follow the active QuantStrike theme.
+- Added consistent terminal-inspired typography across the application.
+
+### Improved
+
+#### Data Architecture
+- Reworked historical analytics to avoid loading the entire 100M+ row dataset into memory.
+- Improved separation between:
+  - Raw historical data
+  - Metadata
+  - Repository/search logic
+  - Historical querying
+  - Quantitative analysis
+  - Frontend visualization
+- Improved scalability of historical analysis through DuckDB and Parquet.
+
+#### Skin Resolution
+- Improved the asset-selection workflow so users select a human-readable skin, variant, and condition rather than interacting with internal historical identifiers.
+- Internal `skin_id` values are now used for data retrieval without being exposed in the user interface.
+- Improved handling of Normal, StatTrak™, Souvenir, vanilla, and condition-specific assets.
+
+#### Historical Visualization
+- Improved historical price charts with daily aggregation for long time ranges.
+- Added median-price context alongside daily price ranges.
+- Added anomaly markers to historical charts.
+- Improved table formatting by hiding internal identifiers and converting technical column names into readable labels.
+- Improved timestamp presentation for historical observations.
+
+#### UI Architecture
+- Consolidated application-wide styling into `frontend/styles.py`.
+- Improved consistency between Streamlit components and Plotly visualizations.
+- Added theme-aware styling for inputs, buttons, tables, expanders, alerts, navigation, and metrics.
+- Removed redundant skin-selection information from the Skin Detail interface.
+
+### Changed
+
+#### Market Overview
+- Temporarily disabled the existing Market Overview implementation while the market intelligence engine is being redesigned.
+- Preserved the previous Market Overview implementation in the codebase for future restoration.
+- Replaced the active Market page with a temporary development placeholder.
+- The future Market engine is planned to expand beyond the original QSI implementation into broader market-wide analytics.
+
+### Notes
+
+- QuantStrike now tracks approximately **22,495 assets** with approximately **105 million historical observations**.
+- Historical prices remain the source of truth; statistically unusual observations are classified rather than silently removed.
+- The current historical analytics architecture is designed to support substantially larger datasets without requiring the full dataset to fit into Pandas memory.
+- Market.CSGO integration and the existing QSI framework remain part of the project's broader market-intelligence roadmap.
+- The next major development phase will focus on rebuilding Market Intelligence around the expanded historical dataset.
+
+---
+
 ## v1.3.0 - Market Intelligence Update — 2026-08-21
 
 ### Added
@@ -106,7 +241,6 @@ All notable changes to QuantStrike will be documented in this file.
 
 This release advances QuantStrike from a historical price tracking tool into a quantitative market analysis platform for CS skin markets.
 
-
 ---
 
 ## [1.0.0] - 2026-08-02
@@ -122,7 +256,7 @@ This release advances QuantStrike from a historical price tracking tool into a q
   `st.session_state`)
 - "Coming soon" pages for Market, Skin, Portfolio, and Analytics, so sidebar
   navigation no longer shows blank pages
-- Curated 928-item demo dataset (`data/demo/`) for fast deployment on
+- Curated 928-item demo dataset (`data/demo/`) for fast deployment to
   Streamlit Cloud, built via `scripts/build_demo_dataset.py`
 - Info expander on the home page listing example searchable skins in the
   demo dataset, generated dynamically from the loaded index
@@ -161,6 +295,7 @@ This release advances QuantStrike from a historical price tracking tool into a q
   parsing bug
 
 ## [0.1.0] - Sprint 1
+
 ### Added
 - `PricePoint` and `Skin` domain models
 - `MarketMetrics` analytics engine: current price, daily change, all-time
