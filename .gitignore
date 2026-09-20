@@ -2,8 +2,15 @@
 __pycache__/
 *.pyc
 .env
+
 data/raw/
-data/processed/
+
+# Ignore processed datasets by default
+data/processed/*.parquet
+
+# Required application metadata
+!data/processed/skin_metadata.parquet
+
 .streamlit/secrets.toml
 **/market_cache/
 *.pkl
