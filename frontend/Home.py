@@ -456,12 +456,29 @@ if skin:
     # Historical data
     # ========================================================
 
-    historical_store = load_historical_store()
-    history = historical_store.load_history(
-        skin.id
-    )
+    try:
+        historical_store = load_historical_store()
 
-    metrics = MarketMetrics(history)
+        history = historical_store.load_history(
+            skin.id
+        )
+
+        metrics = MarketMetrics(history)
+
+    except FileNotFoundError:
+
+        st.warning(
+            "Historical price data is not currently available "
+            "in the deployed version of QuantStrike."
+        )
+
+        st.info(
+            "Skin metadata and market search are available, "
+            "but historical analytics require the historical "
+            "dataset to be connected."
+        )
+
+        st.stop()
 
     # ========================================================
     # Quick Summary
