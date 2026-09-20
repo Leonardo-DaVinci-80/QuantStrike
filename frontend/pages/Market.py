@@ -1,3 +1,102 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import streamlit as st
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(ROOT))
+
+from frontend.styles import load_css, render_theme_toggle
+
+
+st.set_page_config(
+    page_title="QuantStrike — Market",
+    page_icon="📊",
+    layout="wide",
+)
+
+load_css()
+render_theme_toggle()
+
+# ============================================================
+# MARKET INTELLIGENCE — TEMPORARY PLACEHOLDER
+# ============================================================
+
+st.markdown(
+    """
+    <div style="
+        margin-top: 5rem;
+        text-align: center;
+    ">
+        <div class="terminal-label">
+            MARKET INTELLIGENCE
+        </div>
+
+        <div
+            class="terminal-value"
+            style="
+                font-size: 2.5rem;
+                margin-top: 0.75rem;
+            "
+        >
+            COMING SOON
+        </div>
+
+        <div
+            style="
+                color: var(--qs-text-muted);
+                font-family: var(--qs-font-mono);
+                margin-top: 1rem;
+                font-size: 0.9rem;
+            "
+        >
+            The QuantStrike market engine is currently under development.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+st.markdown(
+    """
+    <div style="
+        max-width: 900px;
+        margin: 3rem auto 0 auto;
+    ">
+        <div class="terminal-label">
+            PLANNED SYSTEMS
+        </div>
+
+        <div style="
+            margin-top: 1rem;
+            padding: 1.5rem;
+            border: 1px solid var(--qs-border);
+            background: var(--qs-card);
+        ">
+            <div class="terminal-value">
+                MARKET-WIDE ANALYTICS
+            </div>
+
+            <div style="
+                margin-top: 0.5rem;
+                color: var(--qs-text-muted);
+                font-family: var(--qs-font-mono);
+                line-height: 1.8;
+            ">
+                Price movements · Volume flows · Trending assets
+                · Market volatility · Weapon analysis ·
+                Market anomalies · Cross-skin correlations
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+'''
 import sys
 import os
 from pathlib import Path
@@ -1005,3 +1104,4 @@ with st.expander(
         if analyzer._processing_time is not None
         else "Market matrix processing: loaded from cache"
     )
+    '''
