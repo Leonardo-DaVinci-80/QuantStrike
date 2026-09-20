@@ -8,8 +8,11 @@ data/raw/
 # Ignore processed datasets by default
 data/processed/*.parquet
 
-# Required application metadata
+# Application datasets
 !data/processed/skin_metadata.parquet
+!data/processed/historical_prices.parquet
+!data/processed/daily_market_data.parquet
+!data/processed/market_summary.parquet
 
 .streamlit/secrets.toml
 **/market_cache/
