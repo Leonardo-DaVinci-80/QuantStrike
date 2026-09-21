@@ -1691,10 +1691,30 @@ st.divider()
 st.subheader("Risk vs Return")
 
 st.caption(
-    "Annualized return compared with daily volatility. "
-    "Use alongside drawdown and Sharpe Ratio to understand "
-    "the historical risk/return characteristics of each skin."
+    "Compare historical return with daily volatility over a period "
+    "of your choice."
 )
+
+analysis_period = st.radio(
+    "Analysis Period",
+    options=["7D", "30D", "90D", "6M", "1Y", "2Y", "3Y", "ALL"],
+    index=4,
+    horizontal=True,
+    key="risk_return_period",
+)
+
+
+def get_period_days(period):
+    return {
+        "7D": 7,
+        "30D": 30,
+        "90D": 90,
+        "6M": 182,
+        "1Y": 365,
+        "2Y": 730,
+        "3Y": 1095,
+        "ALL": None,
+    }[period]
 
 
 risk_return_data = []
@@ -1704,15 +1724,96 @@ for skin in selected_skins:
 
     metric = metrics[skin.name]
 
+    history = pd.DataFrame(metric.history)
+
+    if history.empty:
+        continue
+
+    history["timestamp"] = pd.to_datetime(
+        history["timestamp"],
+        errors="coerce",
+    )
+
+    history = history.dropna(
+        subset=["timestamp", "price"]
+    ).sort_values("timestamp")
+
+    if history.empty:
+        continue
+
+    # -----------------------------------------------------
+    # Select analysis period
+    # -----------------------------------------------------
+
+    end_date = history["timestamp"].max()
+
+    period_days = get_period_days(
+        analysis_period
+    )
+
+    if period_days is None:
+
+        period_history = history.copy()
+
+    else:
+
+        start_date = (
+            end_date
+            - pd.Timedelta(days=period_days)
+        )
+
+        period_history = history[
+            history["timestamp"] >= start_date
+        ].copy()
+
+    if len(period_history) < 2:
+        continue
+
+    # -----------------------------------------------------
+    # Return
+    # -----------------------------------------------------
+
+    start_price = period_history["price"].iloc[0]
+    end_price = period_history["price"].iloc[-1]
+
+    if start_price <= 0:
+        continue
+
+    period_return = (
+        (end_price / start_price) - 1
+    ) * 100
+
+    # -----------------------------------------------------
+    # Daily volatility
+    # -----------------------------------------------------
+
+    daily_prices = (
+        period_history
+        .set_index("timestamp")["price"]
+        .resample("1D")
+        .last()
+        .dropna()
+    )
+
+    daily_returns = (
+        daily_prices
+        .pct_change()
+        .dropna()
+    )
+
+    if len(daily_returns) < 2:
+        volatility = 0.0
+    else:
+        volatility = (
+            daily_returns.std()
+            * 100
+        )
+
     risk_return_data.append(
         {
             "Skin": skin.name,
-
-            "Annual Return (%)":
-                metric.annual_return,
-
-            "Daily Volatility (%)":
-                metric.volatility,
+            "Return (%)": period_return,
+            "Daily Volatility (%)": volatility,
         }
     )
 
@@ -1721,45 +1822,55 @@ risk_return_df = pd.DataFrame(
     risk_return_data
 )
 
-fig = px.scatter(
-    risk_return_df,
-    x="Daily Volatility (%)",
-    y="Annual Return (%)",
-    text="Skin",
-    title="Risk vs Return Profile",
-)
 
-fig.update_traces(
-    marker=dict(size=14),
-    textposition="top center",
-)
+if risk_return_df.empty:
 
-fig.add_hline(
-    y=0,
-    line_dash="dash",
-    opacity=0.5,
-)
+    st.info(
+        "Not enough historical data is available "
+        "for the selected analysis period."
+    )
 
-fig.update_layout(
-    hovermode="closest",
-    margin=dict(
-        l=20,
-        r=20,
-        t=55,
-        b=20,
-    ),
-)
+else:
 
-fig = style_plotly(fig)
+    fig = px.scatter(
+        risk_return_df,
+        x="Daily Volatility (%)",
+        y="Return (%)",
+        text="Skin",
+        title=(
+            f"Risk vs Return — "
+            f"{analysis_period}"
+        ),
+    )
 
+    fig.update_traces(
+        marker=dict(size=14),
+        textposition="top center",
+    )
 
-st.plotly_chart(
-    fig,
-    use_container_width=True,
-    key="risk_return_chart",
-)
+    fig.add_hline(
+        y=0,
+        line_dash="dash",
+        opacity=0.5,
+    )
 
+    fig.update_layout(
+        hovermode="closest",
+        margin=dict(
+            l=20,
+            r=20,
+            t=55,
+            b=20,
+        ),
+    )
 
+    fig = style_plotly(fig)
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key="risk_return_chart",
+    )
 # =========================================================
 # END
 # =========================================================
