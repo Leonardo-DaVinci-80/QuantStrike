@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import numpy as np
 from pathlib import Path
 from typing import Optional
 
@@ -588,81 +588,149 @@ class SkinDetailAnalyzer:
     def detect_anomalies(
         self,
         history: pd.DataFrame,
+        window_days: int = 7,
+        low_threshold: float = 0.25,
+        high_threshold: float = 2.0,
     ) -> pd.DataFrame:
         """
-        Flag isolated extreme price observations.
+        Detect unusually low or high individual sale observations.
 
-        These are NOT declared fake or fraudulent.
+        Each observation is compared with the median price of
+        observations on OTHER calendar days within the surrounding
+        window. This prevents multiple anomalies on one day from
+        masking each other.
 
-        They are observations that exhibit:
-            - a very large drop
-            - followed by a substantial recovery
-            - and, where available, volume <= 1
+        Anomalies are statistical outliers, not proof of fraud.
         """
 
         if history.empty:
             return pd.DataFrame()
 
         df = (
-            history
-            .copy()
+            history.copy()
             .sort_values("timestamp")
             .reset_index(drop=True)
         )
 
-        df["previous_price"] = (
-            df["price"].shift(1)
+        df["price"] = pd.to_numeric(
+            df["price"], errors="coerce"
         )
 
-        df["next_price"] = (
-            df["price"].shift(-1)
+        df = df.dropna(
+            subset=["timestamp", "price"]
         )
 
-        df["crash_ratio"] = (
-            df["price"]
-            / df["previous_price"]
+        df = df[
+            (df["price"] > 0)
+            & (df["timestamp"].notna())
+        ].copy()
+
+        if df.empty:
+            return pd.DataFrame()
+
+        df["date"] = pd.to_datetime(
+            df["timestamp"]
+        ).dt.normalize()
+
+        # One reference price per calendar day.
+        # The candidate's own day is excluded later.
+        daily = (
+            df.groupby("date")["price"]
+            .median()
+            .sort_index()
         )
 
-        df["recovery_ratio"] = (
-            df["next_price"]
-            / df["price"]
+        dates = daily.index
+        daily_values = daily.to_numpy()
+
+        reference_prices = []
+
+        for date in df["date"]:
+            # Use only other days within the surrounding window.
+            mask = (
+                (dates != date)
+                & (
+                    np.abs((dates - date).days.to_numpy())
+                    <= window_days
+                )
+            )
+
+            nearby = daily_values[mask]
+
+            if len(nearby) == 0:
+                reference_prices.append(float("nan"))
+            else:
+                reference_prices.append(
+                    float(pd.Series(nearby).median())
+                )
+
+        df["reference_price"] = reference_prices
+
+        df["anomaly_ratio"] = (
+            df["price"] / df["reference_price"]
         )
 
-        isolated = (
-            (df["crash_ratio"] < 0.25)
-            &
-            (df["recovery_ratio"] > 2.0)
+        # Flag both unusually low and unusually high sales.
+        low_anomaly = (
+            df["anomaly_ratio"] < low_threshold
+        )
+
+        high_anomaly = (
+            df["anomaly_ratio"] > high_threshold
         )
 
         if "volume" in df.columns:
-            isolated = (
-                isolated
-                &
-                (df["volume"] <= 1)
+            volume = pd.to_numeric(
+                df["volume"], errors="coerce"
+            )
+            # Preserve the original low-volume criterion.
+            eligible = volume.le(1).fillna(False)
+        else:
+            eligible = pd.Series(
+                True, index=df.index
             )
 
         anomalies = df.loc[
-            isolated
+            (low_anomaly | high_anomaly) & eligible
         ].copy()
 
         if anomalies.empty:
             return anomalies
 
-        anomalies["classification"] = (
-            "isolated_single_sale_anomaly"
+        anomalies["classification"] = "high_price_anomaly"
+
+        anomalies.loc[
+            anomalies["anomaly_ratio"] < low_threshold,
+            "classification"
+        ] = "low_price_anomaly"
+
+        anomalies["previous_price"] = (
+            anomalies["reference_price"]
+        )
+
+        anomalies["next_price"] = (
+            anomalies["reference_price"]
+        )
+
+        anomalies["crash_ratio"] = (
+            anomalies["anomaly_ratio"]
+        )
+
+        anomalies["recovery_ratio"] = (
+            1 / anomalies["anomaly_ratio"]
         )
 
         anomalies["crash_pct"] = (
-            1
-            - anomalies["crash_ratio"]
+            1 - anomalies["anomaly_ratio"]
         ) * 100
 
         anomalies["recovery_pct"] = (
-            anomalies["recovery_ratio"]
-            - 1
+            anomalies["recovery_ratio"] - 1
         ) * 100
 
-        return anomalies
+        return anomalies.sort_values(
+            "timestamp"
+        ).reset_index(drop=True)
 
     # ==========================================================
     # CACHE BUILDER

@@ -2,6 +2,38 @@
 
 All notable changes to QuantStrike will be documented in this file.
 
+## v1.5.0 - Portfolio & Research Management Update — 2026-10-22
+
+### Added
+
+#### Portfolio Management
+- Added the ability to delete holdings from a portfolio.
+- Added a confirmation step before deleting a holding.
+- Added support for removing unwanted positions from portfolio tracking.
+
+#### Watchlist & Alerts
+- Added the ability to delete configured alert rules.
+- Added a confirmation step before deleting an alert rule.
+- Added support for removing obsolete alert configurations.
+
+#### Research Journal
+- Added the ability to edit existing research entries.
+- Added the ability to delete research entries.
+- Added a confirmation step before permanently deleting an entry.
+### Improved
+
+#### Portfolio Management
+- Improved portfolio maintenance by allowing users to remove holdings they no longer want to track.
+#### Alert Management
+- Improved alert configuration management by allowing obsolete rules to be removed without affecting unrelated rules.
+#### Research Journal
+- Improved research workflow flexibility by allowing existing entries to be updated instead of requiring replacement entries.
+- Preserved existing asset associations and research evidence when editing an entry, unless explicitly changed by the application.
+#### Notes
+- Deleting a holding permanently removes its associated portfolio transactions. This changes portfolio calculations and realized PnL; it does not record a sale.
+- Deleting an alert rule also deletes its associated alert events.
+- Research journal entries can now be maintained throughout the research process using the edit and delete functionality.
+
 ## v1.4.0 - Historical Analytics & Quantitative Engine Update — 2026-09-20
 
 ### Added

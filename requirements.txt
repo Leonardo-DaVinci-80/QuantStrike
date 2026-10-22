@@ -4,3 +4,7 @@ plotly
 kagglehub
 pyarrow
 duckdb
+google-genai
+python-dotenv
+numpy
+requests

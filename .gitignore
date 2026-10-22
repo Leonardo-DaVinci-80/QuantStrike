@@ -17,3 +17,4 @@ data/processed/*.parquet
 .streamlit/secrets.toml
 **/market_cache/
 *.pkl
+.envdata/quantstrike_app.sqlite3*

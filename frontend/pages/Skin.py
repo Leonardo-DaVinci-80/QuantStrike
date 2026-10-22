@@ -24,7 +24,7 @@ from frontend.styles import (
 # ============================================================
 
 st.set_page_config(
-    page_title="QuantStrike — Skin Detail",
+    page_title="QuantStrike — Asset Research",
     page_icon="🛠️",
     layout="wide",
 )
@@ -219,7 +219,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 # ============================================================
 # DISPLAY HELPERS
