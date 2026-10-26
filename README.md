@@ -380,7 +380,7 @@ Install the dependencies:
 
 Start the application:
 
-```bash streamlit run app.py ```
+```bash streamlit run frontend/Home.py ```
 
 Open the local **URL** printed by Streamlit in your terminal.
 
